@@ -1,0 +1,205 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
+import { Card, Badge, Modal } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { slugify } from "@/lib/utils";
+import type { Tenant } from "@/types";
+import { Plus, Pencil, Trash2, Users, LayoutGrid } from "lucide-react";
+import Link from "next/link";
+
+export default function AdminTenantsPage() {
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Tenant | null>(null);
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    loadTenants();
+  }, []);
+
+  async function loadTenants() {
+    const { data } = await supabase.from("tenants").select("*").order("created_at");
+    setTenants(data ?? []);
+    setLoading(false);
+  }
+
+  function openCreate() {
+    setEditing(null);
+    setName("");
+    setSlug("");
+    setModalOpen(true);
+  }
+
+  function openEdit(tenant: Tenant) {
+    setEditing(tenant);
+    setName(tenant.name);
+    setSlug(tenant.slug);
+    setModalOpen(true);
+  }
+
+  async function handleSave() {
+    if (!name.trim()) return;
+
+    if (editing) {
+      await supabase
+        .from("tenants")
+        .update({ name, slug: slug || slugify(name) })
+        .eq("id", editing.id);
+      setModalOpen(false);
+      loadTenants();
+    } else {
+      const { data: created } = await supabase
+        .from("tenants")
+        .insert({ name, slug: slug || slugify(name) })
+        .select("id")
+        .single();
+      setModalOpen(false);
+      if (created) {
+        window.location.href = `/admin/tenants/${created.id}/users`;
+      } else {
+        loadTenants();
+      }
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("このテナントを削除しますか？")) return;
+    await supabase.from("tenants").delete().eq("id", id);
+    loadTenants();
+  }
+
+  async function toggleActive(tenant: Tenant) {
+    await supabase
+      .from("tenants")
+      .update({ is_active: !tenant.is_active })
+      .eq("id", tenant.id);
+    loadTenants();
+  }
+
+  if (loading) return <p className="text-gray-500">読み込み中...</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">テナント管理</h1>
+          <p className="text-gray-500 text-sm mt-1">Admin &gt; テナント</p>
+        </div>
+        <Button onClick={openCreate}>
+          <Plus className="w-4 h-4 mr-1" />
+          新規テナント
+        </Button>
+      </div>
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-gray-500">
+                <th className="pb-3 font-medium">名前</th>
+                <th className="pb-3 font-medium">スラッグ</th>
+                <th className="pb-3 font-medium">状態</th>
+                <th className="pb-3 font-medium">作成日</th>
+                <th className="pb-3 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tenants.map((tenant) => (
+                <tr key={tenant.id} className="border-b last:border-0">
+                  <td className="py-3 font-medium">{tenant.name}</td>
+                  <td className="py-3 text-gray-500">{tenant.slug}</td>
+                  <td className="py-3">
+                    <button onClick={() => toggleActive(tenant)}>
+                      <Badge variant={tenant.is_active ? "success" : "danger"}>
+                        {tenant.is_active ? "有効" : "無効"}
+                      </Badge>
+                    </button>
+                  </td>
+                  <td className="py-3 text-gray-500">
+                    {new Date(tenant.created_at).toLocaleDateString("ja-JP")}
+                  </td>
+                  <td className="py-3">
+                    <div className="flex gap-2">
+                      <Link
+                        href={`/admin/tenants/${tenant.id}/users`}
+                        className="text-gray-400 hover:text-blue-600"
+                        title="ユーザー管理"
+                      >
+                        <Users className="w-4 h-4" />
+                      </Link>
+                      <Link
+                        href={`/admin/tenants/${tenant.id}/apps`}
+                        className="text-gray-400 hover:text-blue-600"
+                        title="アプリ管理"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </Link>
+                      <button
+                        onClick={() => openEdit(tenant)}
+                        className="text-gray-400 hover:text-blue-600"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(tenant.id)}
+                        className="text-gray-400 hover:text-red-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {tenants.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-400">
+                    テナントがありません
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editing ? "テナント編集" : "新規テナント"}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleSave}>保存</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="テナント名"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (!editing) setSlug(slugify(e.target.value));
+            }}
+            required
+          />
+          <Input
+            label="スラッグ"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="example-company"
+          />
+        </div>
+      </Modal>
+    </div>
+  );
+}

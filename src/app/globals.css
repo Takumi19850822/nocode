@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sidebar: #1e293b;
+  --color-sidebar-hover: #334155;
+  --color-sidebar-active: #3b82f6;
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+}
+
+body {
+  font-family: "Inter", "Noto Sans JP", system-ui, sans-serif;
+}

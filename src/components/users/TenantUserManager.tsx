@@ -1,0 +1,358 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
+import { Card, Badge, Modal } from "@/components/ui/Card";
+import { Input, Select } from "@/components/ui/Input";
+import type { Profile, UserRole } from "@/types";
+import { Pencil, ArrowLeft, Shield, User } from "lucide-react";
+
+interface TenantUserManagerProps {
+  tenantId: string;
+  tenantName: string;
+  backHref?: string;
+}
+
+export function TenantUserManager({
+  tenantId,
+  tenantName,
+  backHref,
+}: TenantUserManagerProps) {
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [canCreateUsers, setCanCreateUsers] = useState(false);
+  const [canManageTenantAdmins, setCanManageTenantAdmins] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editing, setEditing] = useState<Profile | null>(null);
+  const [error, setError] = useState("");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState<UserRole>("user");
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/tenants/${tenantId}/users`);
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "読み込みに失敗しました");
+      setLoading(false);
+      return;
+    }
+    setUsers(data.users ?? []);
+    setCanCreateUsers(Boolean(data.canCreateUsers));
+    setCanManageTenantAdmins(Boolean(data.canManageTenantAdmins));
+    setError("");
+    setLoading(false);
+  }, [tenantId]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  const tenantAdmins = users.filter((u) => u.role === "tenant_admin");
+  const regularUsers = users.filter((u) => u.role === "user");
+
+  function openCreate(assignRole: UserRole) {
+    setEmail("");
+    setPassword("");
+    setDisplayName("");
+    setRole(assignRole);
+    setError("");
+    setCreateOpen(true);
+  }
+
+  function openEdit(user: Profile) {
+    setEditing(user);
+    setDisplayName(user.display_name);
+    setRole(user.role);
+    setError("");
+    setEditOpen(true);
+  }
+
+  async function handleCreate() {
+    setError("");
+    if (!displayName.trim()) {
+      setError("氏名を入力してください");
+      return;
+    }
+    const res = await fetch(`/api/tenants/${tenantId}/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password,
+        display_name: displayName,
+        role,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "作成に失敗しました");
+      return;
+    }
+    setCreateOpen(false);
+    loadUsers();
+  }
+
+  async function handleUpdate() {
+    if (!editing) return;
+    if (!displayName.trim()) {
+      setError("氏名を入力してください");
+      return;
+    }
+    setError("");
+    const res = await fetch(`/api/tenants/${tenantId}/users/${editing.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        display_name: displayName,
+        role: canManageTenantAdmins || editing.role === "user" ? role : undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "更新に失敗しました");
+      return;
+    }
+    setEditOpen(false);
+    loadUsers();
+  }
+
+  async function toggleActive(user: Profile) {
+    await fetch(`/api/tenants/${tenantId}/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: !user.is_active }),
+    });
+    loadUsers();
+  }
+
+  const createTitle =
+    role === "tenant_admin" ? "テナント管理者を追加" : "一般ユーザーを追加";
+
+  const editRoleOptions =
+    canManageTenantAdmins
+      ? [
+          { label: "一般ユーザー", value: "user" },
+          { label: "テナント管理者", value: "tenant_admin" },
+        ]
+      : [{ label: "一般ユーザー", value: "user" }];
+
+  if (loading) return <p className="text-gray-500">読み込み中...</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          {backHref && (
+            <Link href={backHref} className="text-gray-400 hover:text-gray-600">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold">ユーザー管理</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              テナント: <span className="font-medium text-gray-700">{tenantName}</span>
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {canManageTenantAdmins && (
+            <Button variant="secondary" onClick={() => openCreate("tenant_admin")}>
+              <Shield className="w-4 h-4 mr-1" />
+              テナント管理者を追加
+            </Button>
+          )}
+          <Button onClick={() => openCreate("user")}>
+            <User className="w-4 h-4 mr-1" />
+            一般ユーザーを追加
+          </Button>
+        </div>
+      </div>
+
+      {canManageTenantAdmins && (
+        <Card>
+          <p className="text-sm text-gray-600">
+            <strong>運用フロー:</strong> ① テナント管理者を指定 → ② 一般ユーザーを追加。
+            テナント管理者は自テナントの一般ユーザーのみ管理できます。
+          </p>
+        </Card>
+      )}
+
+      {!canCreateUsers && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          新規アカウント作成には <code className="text-xs">SUPABASE_SECRET_KEY</code>{" "}
+          の設定が必要です。未設定の場合、既存ユーザーのテナント割当のみ可能です。
+        </div>
+      )}
+
+      {error && !createOpen && !editOpen && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
+      <UserTable
+        title="テナント管理者"
+        users={tenantAdmins}
+        emptyMessage="テナント管理者が未設定です。先に管理者を追加してください。"
+        onEdit={openEdit}
+        onToggle={toggleActive}
+      />
+
+      <UserTable
+        title="一般ユーザー"
+        users={regularUsers}
+        emptyMessage="一般ユーザーがいません。"
+        onEdit={openEdit}
+        onToggle={toggleActive}
+      />
+
+      <Modal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title={createTitle}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCreateOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleCreate}>追加</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {role === "tenant_admin" && (
+            <p className="text-sm text-blue-700 bg-blue-50 rounded-lg p-3">
+              このユーザーはテナント「{tenantName}」の管理者になります。
+              アプリ設計・一般ユーザー管理が可能です。
+            </p>
+          )}
+          <Input
+            label="メールアドレス"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <Input
+            label="氏名"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+          />
+          {canCreateUsers && (
+            <Input
+              label="初期パスワード"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              placeholder="8文字以上"
+            />
+          )}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+      </Modal>
+
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="ユーザー編集"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleUpdate}>保存</Button>
+          </>
+        }
+      >
+        {editing && (
+          <div className="space-y-4">
+            <Input label="メール" value={editing.email} disabled />
+            <Input
+              label="氏名"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+            />
+            {(canManageTenantAdmins || editing.role === "user") && (
+              <Select
+                label="ロール"
+                value={role}
+                onChange={(e) => setRole(e.target.value as UserRole)}
+                options={editRoleOptions}
+              />
+            )}
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function UserTable({
+  title,
+  users,
+  emptyMessage,
+  onEdit,
+  onToggle,
+}: {
+  title: string;
+  users: Profile[];
+  emptyMessage: string;
+  onEdit: (user: Profile) => void;
+  onToggle: (user: Profile) => void;
+}) {
+  return (
+    <Card title={title}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-gray-500">
+              <th className="pb-3 font-medium">名前</th>
+              <th className="pb-3 font-medium">メール</th>
+              <th className="pb-3 font-medium">状態</th>
+              <th className="pb-3 font-medium">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id} className="border-b last:border-0">
+                <td className="py-3 font-medium">{user.display_name?.trim() || "（未設定）"}</td>
+                <td className="py-3 text-gray-500">{user.email}</td>
+                <td className="py-3">
+                  <button onClick={() => onToggle(user)}>
+                    <Badge variant={user.is_active ? "success" : "danger"}>
+                      {user.is_active ? "有効" : "無効"}
+                    </Badge>
+                  </button>
+                </td>
+                <td className="py-3">
+                  <button
+                    onClick={() => onEdit(user)}
+                    className="text-gray-400 hover:text-blue-600"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-8 text-center text-gray-400">
+                  {emptyMessage}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
