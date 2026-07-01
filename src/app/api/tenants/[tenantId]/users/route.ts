@@ -5,6 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types";
 type RouteContext = { params: Promise<{ tenantId: string }> };
 
+type MemberRow = {
+  role: UserRole;
+  is_active: boolean;
+  profiles: { id: string; email: string; display_name: string } | { id: string; email: string; display_name: string }[] | null;
+};
+
 export async function GET(_req: Request, context: RouteContext) {
   const { tenantId } = await context.params;
   const auth = await requireTenantManager(tenantId);
@@ -14,8 +20,8 @@ export async function GET(_req: Request, context: RouteContext) {
 
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
+    .from("tenant_members")
+    .select("role, is_active, profiles(id, email, display_name)")
     .eq("tenant_id", tenantId)
     .order("created_at");
 
@@ -23,8 +29,22 @@ export async function GET(_req: Request, context: RouteContext) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const users = ((data as MemberRow[] | null) ?? []).flatMap((m) => {
+    const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    if (!p) return [];
+    return [
+      {
+        id: p.id,
+        email: p.email,
+        display_name: p.display_name,
+        role: m.role,
+        is_active: m.is_active,
+      },
+    ];
+  });
+
   return NextResponse.json({
-    users: data ?? [],
+    users,
     canCreateUsers: hasAdminClient(),
     canManageTenantAdmins: canManageTenantAdmins(auth.profile),
   });
@@ -38,7 +58,7 @@ export async function POST(req: Request, context: RouteContext) {
   }
 
   const body = await req.json();
-  const email = String(body.email ?? "").trim();
+  const email = String(body.email ?? "").trim().toLowerCase();
   const password = String(body.password ?? "");
   const displayName = String(body.display_name ?? "").trim();
   const role = (body.role ?? "user") as UserRole;
@@ -54,75 +74,69 @@ export async function POST(req: Request, context: RouteContext) {
   }
 
   const supabase = await createClient();
+  const admin = hasAdminClient() ? createAdminClient() : null;
+  // 書き込みは可能なら service role（RLS/トリガーはサービスロールを信頼）
+  const writeClient = admin ?? supabase;
 
-  // 既存ユーザーをテナントに追加
-  const { data: existing } = await supabase
+  // 既存プロフィールをメール検索（admin があれば全ユーザー横断で検索可能）
+  const lookupClient = admin ?? supabase;
+  const { data: existingProfile } = await lookupClient
     .from("profiles")
-    .select("id, email, tenant_id")
+    .select("id")
     .eq("email", email)
     .maybeSingle();
 
-  if (existing) {
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        tenant_id: tenantId,
-        role,
-        display_name: displayName,
-      })
-      .eq("id", existing.id);
+  let userId: string;
+  let created = false;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+  if (existingProfile) {
+    userId = existingProfile.id;
+    if (displayName) {
+      await writeClient.from("profiles").update({ display_name: displayName }).eq("id", userId);
     }
-    return NextResponse.json({ userId: existing.id, created: false });
+  } else {
+    // 新規ユーザー作成には secret key が必要
+    if (!admin) {
+      return NextResponse.json(
+        {
+          error:
+            "新規ユーザー作成には SUPABASE_SECRET_KEY の設定が必要です。既存ユーザーのみ追加できます。",
+        },
+        { status: 503 }
+      );
+    }
+    if (password.length < 8) {
+      return NextResponse.json({ error: "パスワードは8文字以上必要です" }, { status: 400 });
+    }
+
+    const { data: createdUser, error: createErr } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { display_name: displayName },
+    });
+    if (createErr || !createdUser.user) {
+      return NextResponse.json(
+        { error: createErr?.message ?? "ユーザー作成に失敗しました" },
+        { status: 500 }
+      );
+    }
+    userId = createdUser.user.id;
+    created = true;
+    await admin.from("profiles").update({ display_name: displayName }).eq("id", userId);
   }
 
-  // 新規ユーザー作成（secret key 必須）
-  if (!hasAdminClient()) {
-    return NextResponse.json(
-      {
-        error:
-          "新規ユーザー作成には SUPABASE_SECRET_KEY の設定が必要です。.env を確認してください。",
-      },
-      { status: 503 }
+  // メンバーシップを追加（既存なら role / 有効化を更新）
+  const { error: memberErr } = await writeClient
+    .from("tenant_members")
+    .upsert(
+      { user_id: userId, tenant_id: tenantId, role, is_active: true },
+      { onConflict: "user_id,tenant_id" }
     );
+
+  if (memberErr) {
+    return NextResponse.json({ error: memberErr.message }, { status: 500 });
   }
 
-  if (password.length < 8) {
-    return NextResponse.json(
-      { error: "パスワードは8文字以上必要です" },
-      { status: 400 }
-    );
-  }
-
-  const admin = createAdminClient();
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { display_name: displayName },
-  });
-
-  if (createErr || !created.user) {
-    return NextResponse.json(
-      { error: createErr?.message ?? "ユーザー作成に失敗しました" },
-      { status: 500 }
-    );
-  }
-
-  const { error: profileErr } = await admin
-    .from("profiles")
-    .update({
-      tenant_id: tenantId,
-      role,
-      display_name: displayName,
-    })
-    .eq("id", created.user.id);
-
-  if (profileErr) {
-    return NextResponse.json({ error: profileErr.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ userId: created.user.id, created: true });
+  return NextResponse.json({ userId, created });
 }

@@ -39,12 +39,24 @@ function LoginFormInner({ showSignupLink }: { showSignupLink: boolean }) {
     router.refresh();
   }
 
+  const resetDone = searchParams.get("reset") === "success";
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <Card className="w-full max-w-md" title="ログイン">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Bridge-code</h1>
+          <p className="text-xs text-gray-500 mt-1">by ForvalCrossGear+</p>
+        </div>
+        <Card title="ログイン">
         {signupDisabled && (
           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
             新規登録は無効です。管理者に招待してもらってください。
+          </p>
+        )}
+        {resetDone && (
+          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+            パスワードを変更しました。新しいパスワードでログインしてください。
           </p>
         )}
         <form onSubmit={handleLogin} className="space-y-4">
@@ -68,6 +80,11 @@ function LoginFormInner({ showSignupLink }: { showSignupLink: boolean }) {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "ログイン中..." : "ログイン"}
           </Button>
+          <p className="text-sm text-center">
+            <Link href="/forgot-password" className="text-blue-600 hover:underline">
+              パスワードをお忘れですか？
+            </Link>
+          </p>
           {showSignupLink && (
             <p className="text-sm text-center text-gray-500">
               初回セットアップ？{" "}
@@ -77,7 +94,8 @@ function LoginFormInner({ showSignupLink }: { showSignupLink: boolean }) {
             </p>
           )}
         </form>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

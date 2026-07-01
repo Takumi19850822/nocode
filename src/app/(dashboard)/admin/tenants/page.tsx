@@ -5,14 +5,18 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, Badge, Modal } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { Pagination } from "@/components/ui/Pagination";
 import { slugify } from "@/lib/utils";
 import type { Tenant } from "@/types";
 import { Plus, Pencil, Trash2, Users, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 
+const PAGE_SIZE = 20;
+
 export default function AdminTenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
   const [name, setName] = useState("");
@@ -85,6 +89,8 @@ export default function AdminTenantsPage() {
 
   if (loading) return <p className="text-gray-500">読み込み中...</p>;
 
+  const pagedTenants = tenants.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -111,7 +117,7 @@ export default function AdminTenantsPage() {
               </tr>
             </thead>
             <tbody>
-              {tenants.map((tenant) => (
+              {pagedTenants.map((tenant) => (
                 <tr key={tenant.id} className="border-b last:border-0">
                   <td className="py-3 font-medium">{tenant.name}</td>
                   <td className="py-3 text-gray-500">{tenant.slug}</td>
@@ -166,6 +172,12 @@ export default function AdminTenantsPage() {
               )}
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={tenants.length}
+            onPageChange={setPage}
+          />
         </div>
       </Card>
 

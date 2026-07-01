@@ -29,9 +29,26 @@ export interface Profile {
   display_name: string;
   role: UserRole;
   tenant_id: string | null;
+  active_tenant_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** ユーザーの1テナントへの所属（テナントごとにロールを持つ） */
+export interface TenantMembership {
+  tenant_id: string;
+  tenant_name: string;
+  role: UserRole;
+  is_active: boolean;
+}
+
+/**
+ * ログイン中ユーザーの実効セッション情報。
+ * role / tenant_id は「現在作業中(active)テナント」での実効値（super_admin は据え置き）。
+ */
+export interface SessionProfile extends Profile {
+  memberships: TenantMembership[];
 }
 
 export interface App {

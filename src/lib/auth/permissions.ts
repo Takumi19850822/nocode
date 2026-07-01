@@ -1,8 +1,8 @@
 import { getCurrentProfile } from "@/lib/supabase/server";
-import type { Profile, UserRole } from "@/types";
+import type { SessionProfile, UserRole } from "@/types";
 
 export async function requireSuperAdmin(): Promise<
-  { profile: Profile } | { error: string; status: number }
+  { profile: SessionProfile } | { error: string; status: number }
 > {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "Unauthorized", status: 401 };
@@ -11,20 +11,25 @@ export async function requireSuperAdmin(): Promise<
 }
 
 export async function requireTenantManager(tenantId: string): Promise<
-  { profile: Profile } | { error: string; status: number }
+  { profile: SessionProfile } | { error: string; status: number }
 > {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "Unauthorized", status: 401 };
   if (profile.role === "super_admin") return { profile };
-  if (profile.role === "tenant_admin" && profile.tenant_id === tenantId) {
+
+  const membership = profile.memberships.find((m) => m.tenant_id === tenantId);
+  if (membership && membership.role === "tenant_admin") {
     return { profile };
   }
   return { error: "Forbidden", status: 403 };
 }
 
-/** super_admin はアプリから付与不可。super_admin は tenant_admin/user のみ任命可能 */
+/**
+ * super_admin はアプリから付与不可。super_admin は tenant_admin/user を任命可能。
+ * テナント管理者は自テナントの一般ユーザーのみ管理可能。
+ */
 export function canAssignRole(
-  actor: Profile,
+  actor: SessionProfile,
   role: UserRole,
   targetTenantId: string
 ): boolean {
@@ -34,14 +39,14 @@ export function canAssignRole(
     return role === "tenant_admin" || role === "user";
   }
 
-  // テナント管理者は一般ユーザーのみ追加・管理
-  if (actor.role === "tenant_admin" && actor.tenant_id === targetTenantId) {
+  const membership = actor.memberships.find((m) => m.tenant_id === targetTenantId);
+  if (membership && membership.role === "tenant_admin") {
     return role === "user";
   }
 
   return false;
 }
 
-export function canManageTenantAdmins(actor: Profile): boolean {
+export function canManageTenantAdmins(actor: SessionProfile): boolean {
   return actor.role === "super_admin";
 }

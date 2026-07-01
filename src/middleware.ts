@@ -45,7 +45,9 @@ export async function middleware(request: NextRequest) {
 
   const isLoginPage = pathname === "/login";
   const isSignupPage = pathname === "/signup";
-  const isPublic = isLoginPage || isSignupPage;
+  const isPasswordReset =
+    pathname === "/forgot-password" || pathname === "/reset-password";
+  const isPublic = isLoginPage || isSignupPage || isPasswordReset;
 
   // サインアップページ: 初回のみ or 明示的許可
   if (isSignupPage) {
@@ -82,26 +84,38 @@ export async function middleware(request: NextRequest) {
   if (user && (pathname.startsWith("/admin") || pathname.startsWith("/tenant"))) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, active_tenant_id")
       .eq("id", user.id)
       .single();
 
-    const role = profile?.role as UserRole | undefined;
+    const globalRole = profile?.role as UserRole | undefined;
+    const isSuperAdmin = globalRole === "super_admin";
 
-    if (pathname.startsWith("/admin") && role !== "super_admin") {
+    if (pathname.startsWith("/admin") && !isSuperAdmin) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       return NextResponse.redirect(url);
     }
 
-    if (
-      pathname.startsWith("/tenant") &&
-      role !== "super_admin" &&
-      role !== "tenant_admin"
-    ) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      return NextResponse.redirect(url);
+    if (pathname.startsWith("/tenant") && !isSuperAdmin) {
+      // active テナントで tenant_admin であることを要求
+      let activeRoleIsAdmin = false;
+      if (profile?.active_tenant_id) {
+        const { data: membership } = await supabase
+          .from("tenant_members")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("tenant_id", profile.active_tenant_id)
+          .eq("is_active", true)
+          .maybeSingle();
+        activeRoleIsAdmin = membership?.role === "tenant_admin";
+      }
+
+      if (!activeRoleIsAdmin) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        return NextResponse.redirect(url);
+      }
     }
   }
 

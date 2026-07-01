@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "NoCode Platform",
-  description: "マルチテナント ノーコードツール",
+  title: "Bridge-code",
+  description: "Bridge-code by ForvalCrossGear+",
 };
 
 export default function RootLayout({

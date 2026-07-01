@@ -62,7 +62,12 @@ export function SignupForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <Card className="w-full max-w-md" title="初回アカウント作成">
+      <div className="w-full max-w-md space-y-6">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-gray-900">Bridge-code</h1>
+        <p className="text-xs text-gray-500 mt-1">by ForvalCrossGear+</p>
+      </div>
+      <Card title="初回アカウント作成">
         <p className="text-sm text-gray-500 mb-4">
           初回セットアップ専用です。super_admin は SQL でのみ設定されます（自動昇格なし）。
         </p>
@@ -102,6 +107,7 @@ export function SignupForm() {
           </Link>
         </p>
       </Card>
+      </div>
     </div>
   );
 }

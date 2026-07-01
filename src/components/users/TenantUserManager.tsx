@@ -5,8 +5,20 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, Badge, Modal } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
-import type { Profile, UserRole } from "@/types";
-import { Pencil, ArrowLeft, Shield, User } from "lucide-react";
+import { Pagination } from "@/components/ui/Pagination";
+import type { UserRole } from "@/types";
+import { Pencil, ArrowLeft, Shield, User, UserMinus } from "lucide-react";
+
+const PAGE_SIZE = 20;
+
+/** テナント所属ユーザー（メンバーシップ + プロフィール氏名） */
+interface TenantMember {
+  id: string;
+  email: string;
+  display_name: string;
+  role: UserRole;
+  is_active: boolean;
+}
 
 interface TenantUserManagerProps {
   tenantId: string;
@@ -19,14 +31,15 @@ export function TenantUserManager({
   tenantName,
   backHref,
 }: TenantUserManagerProps) {
-  const [users, setUsers] = useState<Profile[]>([]);
+  const [users, setUsers] = useState<TenantMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [canCreateUsers, setCanCreateUsers] = useState(false);
   const [canManageTenantAdmins, setCanManageTenantAdmins] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [editing, setEditing] = useState<Profile | null>(null);
+  const [editing, setEditing] = useState<TenantMember | null>(null);
   const [error, setError] = useState("");
+  const [userPage, setUserPage] = useState(1);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,7 +78,7 @@ export function TenantUserManager({
     setCreateOpen(true);
   }
 
-  function openEdit(user: Profile) {
+  function openEdit(user: TenantMember) {
     setEditing(user);
     setDisplayName(user.display_name);
     setRole(user.role);
@@ -122,12 +135,31 @@ export function TenantUserManager({
     loadUsers();
   }
 
-  async function toggleActive(user: Profile) {
+  async function toggleActive(user: TenantMember) {
     await fetch(`/api/tenants/${tenantId}/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_active: !user.is_active }),
     });
+    loadUsers();
+  }
+
+  async function removeFromTenant(user: TenantMember) {
+    if (
+      !confirm(
+        `${user.display_name || user.email} をこのテナントから外しますか？（アカウント自体は削除されません）`
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/tenants/${tenantId}/users/${user.id}`, {
+      method: "DELETE",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error ?? "削除に失敗しました");
+      return;
+    }
     loadUsers();
   }
 
@@ -200,14 +232,24 @@ export function TenantUserManager({
         emptyMessage="テナント管理者が未設定です。先に管理者を追加してください。"
         onEdit={openEdit}
         onToggle={toggleActive}
+        onRemove={removeFromTenant}
       />
 
       <UserTable
         title="一般ユーザー"
-        users={regularUsers}
+        users={regularUsers.slice((userPage - 1) * PAGE_SIZE, userPage * PAGE_SIZE)}
         emptyMessage="一般ユーザーがいません。"
         onEdit={openEdit}
         onToggle={toggleActive}
+        onRemove={removeFromTenant}
+        footer={
+          <Pagination
+            page={userPage}
+            pageSize={PAGE_SIZE}
+            total={regularUsers.length}
+            onPageChange={setUserPage}
+          />
+        }
       />
 
       <Modal
@@ -302,12 +344,16 @@ function UserTable({
   emptyMessage,
   onEdit,
   onToggle,
+  onRemove,
+  footer,
 }: {
   title: string;
-  users: Profile[];
+  users: TenantMember[];
   emptyMessage: string;
-  onEdit: (user: Profile) => void;
-  onToggle: (user: Profile) => void;
+  onEdit: (user: TenantMember) => void;
+  onToggle: (user: TenantMember) => void;
+  onRemove: (user: TenantMember) => void;
+  footer?: React.ReactNode;
 }) {
   return (
     <Card title={title}>
@@ -334,12 +380,22 @@ function UserTable({
                   </button>
                 </td>
                 <td className="py-3">
-                  <button
-                    onClick={() => onEdit(user)}
-                    className="text-gray-400 hover:text-blue-600"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onEdit(user)}
+                      className="text-gray-400 hover:text-blue-600"
+                      title="編集"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onRemove(user)}
+                      className="text-gray-400 hover:text-red-600"
+                      title="このテナントから外す"
+                    >
+                      <UserMinus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -352,6 +408,7 @@ function UserTable({
             )}
           </tbody>
         </table>
+        {footer}
       </div>
     </Card>
   );

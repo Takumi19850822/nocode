@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Pagination } from "@/components/ui/Pagination";
 import { RecordFormFields } from "@/components/records/RecordFormFields";
 import { RecordDeleteModal } from "@/components/records/RecordDeleteModal";
 import { formatFieldDisplayValue } from "@/lib/records/formatFieldValue";
@@ -28,6 +29,10 @@ export default function AppRuntimePage() {
   const [app, setApp] = useState<App | null>(null);
   const [fields, setFields] = useState<AppField[]>([]);
   const [records, setRecords] = useState<AppRecord[]>([]);
+  const [valuesByRecord, setValuesByRecord] = useState<
+    Record<string, Record<string, string>>
+  >({});
+  const [page, setPage] = useState(1);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
   const [searchResults, setSearchResults] = useState<Record<string, unknown[]>>({});
@@ -38,11 +43,40 @@ export default function AppRuntimePage() {
   const [submitError, setSubmitError] = useState("");
 
   const supabase = createClient();
+  const PAGE_SIZE = 20;
 
   useEffect(() => {
     loadApp();
     loadCurrentUser();
   }, [appId]);
+
+  // 表示中ページのレコード値をまとめて1クエリで取得（N+1回避）
+  useEffect(() => {
+    const pageRecordIds = records
+      .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+      .map((r) => r.id);
+    if (pageRecordIds.length === 0) {
+      setValuesByRecord({});
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("app_record_values")
+      .select("record_id, field_id, value")
+      .in("record_id", pageRecordIds)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const map: Record<string, Record<string, string>> = {};
+        data?.forEach((v) => {
+          (map[v.record_id] ??= {})[v.field_id] = v.value;
+        });
+        setValuesByRecord(map);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [records, page]);
 
   async function loadCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -67,6 +101,7 @@ export default function AppRuntimePage() {
 
     setFields(fieldsRes.data ?? []);
     setRecords(recordsRes.data ?? []);
+    setPage(1);
   }
 
   function initFormValues(userName: string): Record<string, string> {
@@ -230,6 +265,7 @@ export default function AppRuntimePage() {
   if (!app) return <p className="text-gray-500">読み込み中...</p>;
 
   const listFields = getListDisplayFields(fields, app.list_field_ids);
+  const pagedRecords = records.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -294,17 +330,24 @@ export default function AppRuntimePage() {
                 </tr>
               </thead>
               <tbody>
-                {records.map((record) => (
+                {pagedRecords.map((record) => (
                   <RecordRow
                     key={record.id}
                     appId={appId}
                     record={record}
                     fields={listFields}
+                    values={valuesByRecord[record.id] ?? {}}
                     onDelete={() => setDeleteRecordId(record.id)}
                   />
                 ))}
               </tbody>
             </table>
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={records.length}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </Card>
@@ -324,28 +367,15 @@ function RecordRow({
   appId,
   record,
   fields,
+  values,
   onDelete,
 }: {
   appId: string;
   record: AppRecord;
   fields: AppField[];
+  values: Record<string, string>;
   onDelete: () => void;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({});
-  const supabase = createClient();
-
-  useEffect(() => {
-    supabase
-      .from("app_record_values")
-      .select("*")
-      .eq("record_id", record.id)
-      .then(({ data }) => {
-        const map: Record<string, string> = {};
-        data?.forEach((v) => { map[v.field_id] = v.value; });
-        setValues(map);
-      });
-  }, [record.id]);
-
   return (
     <tr className="border-b last:border-0 hover:bg-gray-50">
       {fields.map((f) => (
