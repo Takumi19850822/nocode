@@ -9,7 +9,8 @@
     "lint": "next lint",
     "pages:build": "npx @cloudflare/next-on-pages",
     "pages:dev": "npx wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat",
-    "pages:deploy": "npm run pages:build && wrangler pages deploy .vercel/output/static",
+    "pages:deploy": "wrangler pages deploy .vercel/output/static",
+    "deploy": "npm run pages:deploy",
     "setup:supabase": "node scripts/setup-supabase.mjs",
     "test:connect": "node scripts/test-connect.mjs"
   },
