@@ -1,13 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/Button";
-import { Card, Badge, Modal } from "@/components/ui/Card";
+import { Badge, Modal } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
+import {
+  PageBody,
+  PageFrame,
+  PageHeader,
+  PageSection,
+} from "@/components/layout/PageLayout";
 import type { UserRole } from "@/types";
-import { Pencil, ArrowLeft, Shield, User, UserMinus } from "lucide-react";
+import { Pencil, Shield, User, UserMinus } from "lucide-react";
 
 const PAGE_SIZE = 20;
 
@@ -177,80 +182,76 @@ export function TenantUserManager({
   if (loading) return <p className="text-gray-500">読み込み中...</p>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          {backHref && (
-            <Link href={backHref} className="text-gray-400 hover:text-gray-600">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-          )}
-          <div>
-            <h1 className="text-2xl font-bold">ユーザー管理</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              テナント: <span className="font-medium text-gray-700">{tenantName}</span>
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {canManageTenantAdmins && (
-            <Button variant="secondary" onClick={() => openCreate("tenant_admin")}>
-              <Shield className="w-4 h-4 mr-1" />
-              テナント管理者を追加
+    <PageFrame>
+      <PageHeader
+        title="ユーザー管理"
+        description={`テナント: ${tenantName}`}
+        backHref={backHref}
+        actions={
+          <>
+            {canManageTenantAdmins && (
+              <Button variant="secondary" onClick={() => openCreate("tenant_admin")}>
+                <Shield className="w-4 h-4 mr-1" />
+                テナント管理者を追加
+              </Button>
+            )}
+            <Button onClick={() => openCreate("user")}>
+              <User className="w-4 h-4 mr-1" />
+              一般ユーザーを追加
             </Button>
-          )}
-          <Button onClick={() => openCreate("user")}>
-            <User className="w-4 h-4 mr-1" />
-            一般ユーザーを追加
-          </Button>
-        </div>
-      </div>
-
-      {canManageTenantAdmins && (
-        <Card>
-          <p className="text-sm text-gray-600">
-            <strong>運用フロー:</strong> ① テナント管理者を指定 → ② 一般ユーザーを追加。
-            テナント管理者は自テナントの一般ユーザーのみ管理できます。
-          </p>
-        </Card>
-      )}
-
-      {!canCreateUsers && (
-        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-          新規アカウント作成には <code className="text-xs">SUPABASE_SECRET_KEY</code>{" "}
-          の設定が必要です。未設定の場合、既存ユーザーのテナント割当のみ可能です。
-        </div>
-      )}
-
-      {error && !createOpen && !editOpen && (
-        <p className="text-sm text-red-600">{error}</p>
-      )}
-
-      <UserTable
-        title="テナント管理者"
-        users={tenantAdmins}
-        emptyMessage="テナント管理者が未設定です。先に管理者を追加してください。"
-        onEdit={openEdit}
-        onToggle={toggleActive}
-        onRemove={removeFromTenant}
-      />
-
-      <UserTable
-        title="一般ユーザー"
-        users={regularUsers.slice((userPage - 1) * PAGE_SIZE, userPage * PAGE_SIZE)}
-        emptyMessage="一般ユーザーがいません。"
-        onEdit={openEdit}
-        onToggle={toggleActive}
-        onRemove={removeFromTenant}
-        footer={
-          <Pagination
-            page={userPage}
-            pageSize={PAGE_SIZE}
-            total={regularUsers.length}
-            onPageChange={setUserPage}
-          />
+          </>
         }
       />
+
+      <PageBody>
+        {canManageTenantAdmins && (
+          <PageSection>
+            <p className="text-sm text-gray-600">
+              <strong>運用フロー:</strong> ① テナント管理者を指定 → ② 一般ユーザーを追加。
+              テナント管理者は自テナントの一般ユーザーのみ管理できます。
+            </p>
+          </PageSection>
+        )}
+
+        {!canCreateUsers && (
+          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            新規アカウント作成には <code className="text-xs">SUPABASE_SECRET_KEY</code>{" "}
+            の設定が必要です。未設定の場合、既存ユーザーのテナント割当のみ可能です。
+          </div>
+        )}
+
+        {error && !createOpen && !editOpen && (
+          <p className="text-sm text-red-600">{error}</p>
+        )}
+
+        <UserTable
+          title="テナント管理者"
+          users={tenantAdmins}
+          emptyMessage="テナント管理者が未設定です。先に管理者を追加してください。"
+          onEdit={openEdit}
+          onToggle={toggleActive}
+          onRemove={removeFromTenant}
+          bordered={canManageTenantAdmins}
+        />
+
+        <UserTable
+          title="一般ユーザー"
+          users={regularUsers.slice((userPage - 1) * PAGE_SIZE, userPage * PAGE_SIZE)}
+          emptyMessage="一般ユーザーがいません。"
+          onEdit={openEdit}
+          onToggle={toggleActive}
+          onRemove={removeFromTenant}
+          bordered
+          footer={
+            <Pagination
+              page={userPage}
+              pageSize={PAGE_SIZE}
+              total={regularUsers.length}
+              onPageChange={setUserPage}
+            />
+          }
+        />
+      </PageBody>
 
       <Modal
         open={createOpen}
@@ -334,7 +335,7 @@ export function TenantUserManager({
           </div>
         )}
       </Modal>
-    </div>
+    </PageFrame>
   );
 }
 
@@ -346,6 +347,7 @@ function UserTable({
   onToggle,
   onRemove,
   footer,
+  bordered = false,
 }: {
   title: string;
   users: TenantMember[];
@@ -354,60 +356,61 @@ function UserTable({
   onToggle: (user: TenantMember) => void;
   onRemove: (user: TenantMember) => void;
   footer?: React.ReactNode;
+  bordered?: boolean;
 }) {
   return (
-    <Card title={title}>
+    <PageSection title={title} bordered={bordered}>
       <table className="stack-table w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-500">
-              <th className="pb-3 font-medium">名前</th>
-              <th className="pb-3 font-medium">メール</th>
-              <th className="pb-3 font-medium">状態</th>
-              <th className="pb-3 font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-b last:border-0">
-                <td className="py-3 font-medium" data-label="名前">{user.display_name?.trim() || "（未設定）"}</td>
-                <td className="py-3 text-gray-500 break-all" data-label="メール">{user.email}</td>
-                <td className="py-3" data-label="状態">
-                  <button onClick={() => onToggle(user)}>
-                    <Badge variant={user.is_active ? "success" : "danger"}>
-                      {user.is_active ? "有効" : "無効"}
-                    </Badge>
+        <thead>
+          <tr>
+            <th>名前</th>
+            <th>メール</th>
+            <th>状態</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((user) => (
+            <tr key={user.id}>
+              <td className="py-3 font-medium" data-label="名前">{user.display_name?.trim() || "（未設定）"}</td>
+              <td className="py-3 text-gray-500 break-all" data-label="メール">{user.email}</td>
+              <td className="py-3" data-label="状態">
+                <button onClick={() => onToggle(user)}>
+                  <Badge variant={user.is_active ? "success" : "danger"}>
+                    {user.is_active ? "有効" : "無効"}
+                  </Badge>
+                </button>
+              </td>
+              <td className="py-3" data-label="操作">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onEdit(user)}
+                    className="text-gray-400 hover:text-blue-600"
+                    title="編集"
+                  >
+                    <Pencil className="w-4 h-4" />
                   </button>
-                </td>
-                <td className="py-3" data-label="操作">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onEdit(user)}
-                      className="text-gray-400 hover:text-blue-600"
-                      title="編集"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => onRemove(user)}
-                      className="text-gray-400 hover:text-red-600"
-                      title="このテナントから外す"
-                    >
-                      <UserMinus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {users.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-8 text-center text-gray-400">
-                  {emptyMessage}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        {footer}
-    </Card>
+                  <button
+                    onClick={() => onRemove(user)}
+                    className="text-gray-400 hover:text-red-600"
+                    title="このテナントから外す"
+                  >
+                    <UserMinus className="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {users.length === 0 && (
+            <tr>
+              <td colSpan={4} className="py-8 text-center text-gray-400">
+                {emptyMessage}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {footer}
+    </PageSection>
   );
 }

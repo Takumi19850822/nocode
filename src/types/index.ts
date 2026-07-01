@@ -130,6 +130,24 @@ export interface AppField {
   updated_at: string;
 }
 
+export interface AppRecordExport {
+  id: string;
+  app_id: string;
+  tenant_id: string;
+  created_by: string | null;
+  field_ids: string[];
+  include_created_at: boolean;
+  include_updated_at: boolean;
+  file_name: string;
+  storage_path: string | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  row_count: number | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
 export interface AppRecord {
   id: string;
   app_id: string;

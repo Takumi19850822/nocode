@@ -3,8 +3,14 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Card, Badge } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
+import {
+  PageBody,
+  PageFrame,
+  PageHeader,
+  PageSection,
+} from "@/components/layout/PageLayout";
 import type { Profile, Tenant, UserRole } from "@/types";
 import { Users } from "lucide-react";
 
@@ -60,33 +66,36 @@ export default function AdminUsersPage() {
   if (loading) return <p className="text-gray-500">読み込み中...</p>;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">ユーザー管理（Admin）</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          1ユーザーは複数テナントに所属できます。テナントへの追加・ロール変更は{" "}
-          <Link href="/admin/tenants" className="text-blue-600 hover:underline">
-            テナント管理 → ユーザー管理
-          </Link>{" "}
-          から行ってください。
-        </p>
-      </div>
+    <PageFrame>
+      <PageHeader
+        title="ユーザー管理（Admin）"
+        description={
+          <>
+            1ユーザーは複数テナントに所属できます。テナントへの追加・ロール変更は{" "}
+            <Link href="/admin/tenants" className="text-slate-300 hover:text-white underline">
+              テナント管理 → ユーザー管理
+            </Link>{" "}
+            から行ってください。
+          </>
+        }
+      />
 
-      <Card title="プラットフォーム管理者（super_admin）">
-        <p className="text-xs text-gray-500 mb-4">
-          super_admin はアプリから付与できません（SQL でのみ設定）。
-        </p>
-        <table className="stack-table w-full text-sm">
+      <PageBody>
+        <PageSection title="プラットフォーム管理者（super_admin）">
+          <p className="text-xs text-gray-500 mb-4">
+            super_admin はアプリから付与できません（SQL でのみ設定）。
+          </p>
+          <table className="stack-table w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-gray-500">
-                <th className="pb-3 font-medium">名前</th>
-                <th className="pb-3 font-medium">メール</th>
-                <th className="pb-3 font-medium">ロール</th>
+              <tr>
+                <th>名前</th>
+                <th>メール</th>
+                <th>ロール</th>
               </tr>
             </thead>
             <tbody>
               {platformAdmins.map((user) => (
-                <tr key={user.id} className="border-b last:border-0">
+                <tr key={user.id}>
                   <td className="py-3 font-medium" data-label="名前">{user.display_name}</td>
                   <td className="py-3 text-gray-500 break-all" data-label="メール">{user.email}</td>
                   <td className="py-3" data-label="ロール">
@@ -96,22 +105,22 @@ export default function AdminUsersPage() {
               ))}
             </tbody>
           </table>
-      </Card>
+        </PageSection>
 
-      <Card title="ユーザーと所属テナント">
-        <table className="stack-table w-full text-sm">
+        <PageSection title="ユーザーと所属テナント" bordered>
+          <table className="stack-table w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-gray-500">
-                <th className="pb-3 font-medium">名前</th>
-                <th className="pb-3 font-medium">メール</th>
-                <th className="pb-3 font-medium">所属テナント / ロール</th>
+              <tr>
+                <th>名前</th>
+                <th>メール</th>
+                <th>所属テナント / ロール</th>
               </tr>
             </thead>
             <tbody>
               {pagedTenantUsers.map((user) => {
                 const ms = membershipsOf(user.id);
                 return (
-                  <tr key={user.id} className="border-b last:border-0 align-top">
+                  <tr key={user.id} className="align-top">
                     <td className="py-3 font-medium" data-label="名前">
                       {user.display_name?.trim() || "（未設定）"}
                     </td>
@@ -159,7 +168,8 @@ export default function AdminUsersPage() {
             total={tenantUsers.length}
             onPageChange={setPage}
           />
-      </Card>
-    </div>
+        </PageSection>
+      </PageBody>
+    </PageFrame>
   );
 }

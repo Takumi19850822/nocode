@@ -9,26 +9,24 @@ import type {
 const EMPTY_LABEL = "（空欄）";
 
 export interface AggregationResult {
-  /** 縦軸のキー（表示順） */
+  /** 表・グラフの行キー（横軸 / 左列） */
   rowKeys: string[];
-  /** 横軸の系列キー（単純集計は1系列） */
+  /** 表・グラフの列キー（系列 / 色分け） */
   colKeys: string[];
   /** matrix[rowKey][colKey] = 集計値 */
   matrix: Record<string, Record<string, number>>;
 }
 
 function bucketDate(value: string, unit: DateUnit): string {
-  // "YYYY-MM-DD" / "YYYY-MM-DDTHH:mm" を想定
   const ymd = value.slice(0, 10);
-  if (unit === "month") return ymd.slice(0, 7); // YYYY-MM
-  return ymd; // YYYY-MM-DD
+  if (unit === "month") return ymd.slice(0, 7);
+  return ymd;
 }
 
 function isDateField(field: AppField | undefined): boolean {
   return field?.field_type === "date" || field?.field_type === "datetime";
 }
 
-/** 1つの軸について、レコードの表示キーを求める */
 function keyForAxis(
   axis: AggregationAxis,
   field: AppField | undefined,
@@ -41,7 +39,6 @@ function keyForAxis(
     return bucketDate(value, axis.date_unit);
   }
 
-  // 選択肢系はラベルに変換
   if (field && field.options.length > 0) {
     const opt = field.options.find((o) => o.value === value);
     if (opt) return opt.label;
@@ -75,7 +72,24 @@ export function getColAxes(config: AggregationConfig): AggregationAxis[] {
   return axes;
 }
 
-/** 複数軸のキーを結合 */
+/** 縦軸が2つ以上 → 第一キーを系列、第二キー以降を行（グラフ横軸）に割り当て */
+export function usesRowSeriesPivot(config: AggregationConfig): boolean {
+  return getRowAxes(config).length >= 2;
+}
+
+/** グラフ横軸・表の行見出しに使う縦軸キー */
+export function getDisplayRowAxes(config: AggregationConfig): AggregationAxis[] {
+  const rowAxes = getRowAxes(config);
+  if (usesRowSeriesPivot(config)) return rowAxes.slice(1);
+  return rowAxes;
+}
+
+/** 系列（色分け）の元になる縦軸第一キー */
+export function getSeriesRowAxis(config: AggregationConfig): AggregationAxis | undefined {
+  if (!usesRowSeriesPivot(config)) return undefined;
+  return config.row;
+}
+
 function combineAxisKeys(
   axes: AggregationAxis[],
   fields: AppField[],
@@ -88,6 +102,10 @@ function combineAxisKeys(
   return parts.join(" / ");
 }
 
+function fieldForAxis(fields: AppField[], axis: AggregationAxis): AppField | undefined {
+  return fields.find((f) => f.id === axis.field_id);
+}
+
 /** 集計値のラベル（表示用） */
 export function measureLabel(config: AggregationConfig, fields: AppField[]): string {
   const m = config.measure;
@@ -97,29 +115,46 @@ export function measureLabel(config: AggregationConfig, fields: AppField[]): str
   return m.kind === "sum" ? `${name} 合計` : `${name} 平均`;
 }
 
-/** 縦軸の第一キーが日付/日時フィールドか */
+/** 縦軸の第一キーが日付/日時フィールドか（単一キー時の後方互換） */
 export function isDateRowAxis(config: AggregationConfig, fields: AppField[]): boolean {
-  const rowField = fields.find((f) => f.id === config.row.field_id);
-  return isDateField(rowField);
+  return getDisplayRowAxes(config).some((axis) =>
+    isDateField(fieldForAxis(fields, axis))
+  );
 }
 
 /** グラフ横軸（X軸）のラベル */
 export function chartXAxisLabel(config: AggregationConfig, fields: AppField[]): string {
-  if (isDateRowAxis(config, fields)) {
-    const unit = config.row.date_unit === "day" ? "日" : "月";
-    const rowField = fields.find((f) => f.id === config.row.field_id);
-    const name = rowField?.label ?? "日付";
-    return `${name}（${unit}別）`;
+  const xAxes = getDisplayRowAxes(config);
+
+  if (xAxes.length === 1) {
+    const field = fieldForAxis(fields, xAxes[0]);
+    if (isDateField(field)) {
+      const unit = xAxes[0].date_unit === "day" ? "日" : "月";
+      return `${field?.label ?? "日付"}（${unit}別）`;
+    }
+    return field?.label ?? "項目";
   }
-  const rowField = fields.find((f) => f.id === config.row.field_id);
-  return rowField?.label ?? "項目";
+
+  return xAxes
+    .map((axis) => fieldForAxis(fields, axis)?.label ?? "項目")
+    .join(" / ");
 }
 
-/**
- * 集計を計算する。
- * @param recordIds 対象レコードID（全件）
- * @param valuesByRecord レコードID -> (フィールドID -> 値)
- */
+/** 系列（凡例）のラベル */
+export function chartSeriesAxisLabel(config: AggregationConfig, fields: AppField[]): string {
+  if (usesRowSeriesPivot(config)) {
+    const field = fieldForAxis(fields, config.row);
+    return field?.label ?? "系列";
+  }
+  if (config.type === "cross" && config.col) {
+    const colAxes = getColAxes(config);
+    return colAxes
+      .map((axis) => fieldForAxis(fields, axis)?.label ?? "項目")
+      .join(" / ");
+  }
+  return measureLabel(config, fields);
+}
+
 export function computeAggregation(
   config: AggregationConfig,
   fields: AppField[],
@@ -129,9 +164,9 @@ export function computeAggregation(
   const rowAxes = getRowAxes(config);
   const colAxes = getColAxes(config);
   const isCross = config.type === "cross" && colAxes.length > 0;
+  const pivotRows = usesRowSeriesPivot(config);
   const singleColKey = measureLabel(config, fields);
 
-  // sum/avg 用のアキュムレータ
   const sumMap: Record<string, Record<string, number>> = {};
   const cntMap: Record<string, Record<string, number>> = {};
   const rowKeySet = new Set<string>();
@@ -140,13 +175,30 @@ export function computeAggregation(
   for (const rid of recordIds) {
     const values = valuesByRecord[rid] ?? {};
 
-    const rowKey = combineAxisKeys(rowAxes, fields, values);
-    rowKeySet.add(rowKey);
+    let rowKey: string;
+    let colKey: string;
 
-    const colKey = isCross ? combineAxisKeys(colAxes, fields, values) : singleColKey;
+    if (pivotRows) {
+      // 第一キー → 系列（色）、第二キー以降 → 行（グラフの横軸）
+      rowKey = combineAxisKeys(rowAxes.slice(1), fields, values);
+      const seriesBase = keyForAxis(
+        rowAxes[0],
+        fieldForAxis(fields, rowAxes[0]),
+        values[rowAxes[0].field_id]
+      );
+      if (isCross) {
+        colKey = `${seriesBase} / ${combineAxisKeys(colAxes, fields, values)}`;
+      } else {
+        colKey = seriesBase;
+      }
+    } else {
+      rowKey = combineAxisKeys(rowAxes, fields, values);
+      colKey = isCross ? combineAxisKeys(colAxes, fields, values) : singleColKey;
+    }
+
+    rowKeySet.add(rowKey);
     colKeySet.add(colKey);
 
-    // メジャー加算値
     let add = 0;
     if (config.measure.kind === "count") {
       add = 1;
@@ -161,7 +213,8 @@ export function computeAggregation(
   }
 
   const rowKeys = sortKeys([...rowKeySet]);
-  const colKeys = isCross ? sortKeys([...colKeySet]) : [singleColKey];
+  const colKeys =
+    pivotRows || isCross ? sortKeys([...colKeySet]) : [singleColKey];
 
   const matrix: Record<string, Record<string, number>> = {};
   for (const rk of rowKeys) {
@@ -172,7 +225,6 @@ export function computeAggregation(
       if (config.measure.kind === "avg") {
         matrix[rk][ck] = cnt > 0 ? sum / cnt : 0;
       } else {
-        // count / sum とも合計値でよい（count は add=1 の合計）
         matrix[rk][ck] = sum;
       }
     }

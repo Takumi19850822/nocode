@@ -4,10 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
-import { Card, Badge, Modal } from "@/components/ui/Card";
+import { Badge, Modal } from "@/components/ui/Card";
 import { Input, Textarea } from "@/components/ui/Input";
+import {
+  PageBody,
+  PageFrame,
+  PageHeader,
+  PageSection,
+} from "@/components/layout/PageLayout";
 import type { App } from "@/types";
-import { Plus, Pencil, Settings, LayoutGrid, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Settings, LayoutGrid } from "lucide-react";
 
 interface TenantAppsManagerProps {
   tenantId: string;
@@ -97,75 +103,73 @@ export function TenantAppsManager({
   if (loading) return <p className="text-gray-500">読み込み中...</p>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          {backHref && (
-            <Link href={backHref} className="text-gray-400 hover:text-gray-600">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-          )}
-          <div>
-            <h1 className="text-2xl font-bold">アプリ管理</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              テナント: <span className="font-medium text-gray-700">{tenantName}</span>
+    <PageFrame>
+      <PageHeader
+        title="アプリ管理"
+        description={`テナント: ${tenantName}`}
+        backHref={backHref}
+        actions={
+          <Button onClick={openCreate} className="w-full sm:w-auto">
+            <Plus className="w-4 h-4 mr-1" />
+            新規アプリ
+          </Button>
+        }
+      />
+
+      <PageBody>
+        {error && !modalOpen && <p className="text-sm text-red-600">{error}</p>}
+
+        <PageSection>
+          {apps.length === 0 ? (
+            <p className="text-center py-12 text-gray-400">
+              アプリがありません。「新規アプリ」から作成してください。
             </p>
-          </div>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-1" />
-          新規アプリ
-        </Button>
-      </div>
-
-      {error && !modalOpen && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {apps.map((app) => (
-          <Card key={app.id}>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <LayoutGrid className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">{app.name}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
-                    {app.description || "説明なし"}
-                  </p>
-                </div>
-              </div>
-              <Badge variant={app.is_active ? "success" : "danger"}>
-                {app.is_active ? "有効" : "無効"}
-              </Badge>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Link href={`/tenant/apps/${app.id}/builder`} className="flex-1">
-                <Button variant="secondary" size="sm" className="w-full">
-                  <Settings className="w-3 h-3 mr-1" />
-                  設計
-                </Button>
-              </Link>
-              <Link href={`/apps/${app.id}`} className="flex-1">
-                <Button size="sm" className="w-full">
-                  開く
-                </Button>
-              </Link>
-              <button
-                onClick={() => openEdit(app)}
-                className="text-gray-400 hover:text-blue-600 p-1"
-              >
-                <Pencil className="w-4 h-4" />
-              </button>
-            </div>
-          </Card>
-        ))}
-        {apps.length === 0 && (
-          <div className="col-span-full text-center py-12 text-gray-400">
-            アプリがありません。「新規アプリ」から作成してください。
-          </div>
-        )}
-      </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {apps.map((app) => (
+                <li key={app.id} className="py-4 first:pt-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                        <LayoutGrid className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold">{app.name}</h3>
+                          <Badge variant={app.is_active ? "success" : "danger"}>
+                            {app.is_active ? "有効" : "無効"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                          {app.description || "説明なし"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Link href={`/tenant/apps/${app.id}/builder`}>
+                        <Button variant="secondary" size="sm">
+                          <Settings className="w-3 h-3 mr-1" />
+                          設計
+                        </Button>
+                      </Link>
+                      <Link href={`/apps/${app.id}`}>
+                        <Button size="sm">開く</Button>
+                      </Link>
+                      <button
+                        onClick={() => openEdit(app)}
+                        className="text-gray-400 hover:text-blue-600 p-1"
+                        title="編集"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </PageSection>
+      </PageBody>
 
       <Modal
         open={modalOpen}
@@ -195,6 +199,6 @@ export function TenantAppsManager({
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       </Modal>
-    </div>
+    </PageFrame>
   );
 }

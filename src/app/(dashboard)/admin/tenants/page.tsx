@@ -3,9 +3,15 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
-import { Card, Badge, Modal } from "@/components/ui/Card";
+import { Badge, Modal } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
+import {
+  PageBody,
+  PageFrame,
+  PageHeader,
+  PageSection,
+} from "@/components/layout/PageLayout";
 import { slugify } from "@/lib/utils";
 import type { Tenant } from "@/types";
 import { Plus, Pencil, Trash2, Users, LayoutGrid } from "lucide-react";
@@ -92,32 +98,33 @@ export default function AdminTenantsPage() {
   const pagedTenants = tenants.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">テナント管理</h1>
-          <p className="text-gray-500 text-sm mt-1">Admin &gt; テナント</p>
-        </div>
-        <Button onClick={openCreate} className="w-full sm:w-auto shrink-0">
-          <Plus className="w-4 h-4 mr-1" />
-          新規テナント
-        </Button>
-      </div>
+    <PageFrame>
+      <PageHeader
+        title="テナント管理"
+        description="Admin > テナント"
+        actions={
+          <Button onClick={openCreate} className="w-full sm:w-auto shrink-0">
+            <Plus className="w-4 h-4 mr-1" />
+            新規テナント
+          </Button>
+        }
+      />
 
-      <Card>
-        <table className="stack-table w-full text-sm">
+      <PageBody>
+        <PageSection>
+          <table className="stack-table w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-gray-500">
-                <th className="pb-3 font-medium">名前</th>
-                <th className="pb-3 font-medium">スラッグ</th>
-                <th className="pb-3 font-medium">状態</th>
-                <th className="pb-3 font-medium">作成日</th>
-                <th className="pb-3 font-medium">操作</th>
+              <tr>
+                <th>名前</th>
+                <th>スラッグ</th>
+                <th>状態</th>
+                <th>作成日</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {pagedTenants.map((tenant) => (
-                <tr key={tenant.id} className="border-b last:border-0">
+                <tr key={tenant.id}>
                   <td className="py-3 font-medium" data-label="名前">{tenant.name}</td>
                   <td className="py-3 text-gray-500 break-all" data-label="スラッグ">{tenant.slug}</td>
                   <td className="py-3" data-label="状態">
@@ -177,7 +184,8 @@ export default function AdminTenantsPage() {
             total={tenants.length}
             onPageChange={setPage}
           />
-      </Card>
+        </PageSection>
+      </PageBody>
 
       <Modal
         open={modalOpen}
@@ -210,6 +218,6 @@ export default function AdminTenantsPage() {
           />
         </div>
       </Modal>
-    </div>
+    </PageFrame>
   );
 }

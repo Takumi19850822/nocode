@@ -349,6 +349,9 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
             <p className="text-xs font-medium text-gray-600">
               {type === "cross" ? "縦軸（集計キー）" : "集計キー"}
             </p>
+            <p className="text-xs text-gray-500 -mt-1">
+              グラフ表示時：第一キーで色分け（系列）、第二キー以降を横軸（下）に使います。
+            </p>
             <AxisKeyFields
               label="第一キー"
               slot={row1}

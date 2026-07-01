@@ -2,10 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import {
+  PageBody,
+  PageFrame,
+  PageHeader,
+  PageSection,
+} from "@/components/layout/PageLayout";
 import { RecordDetailView } from "@/components/records/RecordDetailView";
 import { RecordFormFields } from "@/components/records/RecordFormFields";
 import { RecordDeleteModal } from "@/components/records/RecordDeleteModal";
@@ -16,7 +20,7 @@ import type {
   SearchFieldConfig,
 } from "@/types";
 import { getProfileDisplayName } from "@/lib/auth/profileDisplayName";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 export default function RecordDetailPage() {
   const params = useParams();
@@ -224,22 +228,13 @@ export default function RecordDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Link href={`/apps/${appId}`} className="text-gray-400 hover:text-gray-600">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold">{app.name}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              レコード詳細 — 作成日{" "}
-              {new Date(record.created_at).toLocaleString("ja-JP")}
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {!editing ? (
+    <PageFrame>
+      <PageHeader
+        title={app.name}
+        description="レコード詳細"
+        backHref={`/apps/${appId}`}
+        actions={
+          !editing ? (
             <>
               <Button variant="secondary" onClick={startEdit}>
                 <Pencil className="w-4 h-4 mr-1" />
@@ -259,13 +254,26 @@ export default function RecordDetailPage() {
                 {saving ? "保存中..." : "保存"}
               </Button>
             </>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
-      <Card title={editing ? "レコード編集" : "レコード詳細"}>
+      <PageBody className="space-y-5">
+        <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500 pb-4 border-b border-gray-100">
+          <div className="flex gap-1.5">
+            <dt className="font-medium text-gray-400">作成日</dt>
+            <dd>{new Date(record.created_at).toLocaleString("ja-JP")}</dd>
+          </div>
+          {record.updated_at && record.updated_at !== record.created_at && (
+            <div className="flex gap-1.5">
+              <dt className="font-medium text-gray-400">更新日</dt>
+              <dd>{new Date(record.updated_at).toLocaleString("ja-JP")}</dd>
+            </div>
+          )}
+        </dl>
+
         {editing ? (
-          <>
+          <PageSection title="レコード編集">
             <RecordFormFields
               fields={fields}
               formValues={formValues}
@@ -280,11 +288,11 @@ export default function RecordDetailPage() {
               onApplySearchResult={applySearchResult}
             />
             {saveError && <p className="text-sm text-red-600 mt-4">{saveError}</p>}
-          </>
+          </PageSection>
         ) : (
           <RecordDetailView fields={fields} values={values} />
         )}
-      </Card>
+      </PageBody>
 
       <RecordDeleteModal
         appId={appId}
@@ -293,6 +301,6 @@ export default function RecordDetailPage() {
         onClose={() => setDeleteOpen(false)}
         onDeleted={() => router.push(`/apps/${appId}`)}
       />
-    </div>
+    </PageFrame>
   );
 }

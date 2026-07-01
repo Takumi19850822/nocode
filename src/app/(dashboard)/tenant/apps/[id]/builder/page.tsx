@@ -2,11 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { v4 as uuidv4 } from "uuid";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import {
+  PageBody,
+  PageFrame,
+  PageHeader,
+  PageSection,
+} from "@/components/layout/PageLayout";
 import { FieldCanvas } from "@/components/builder/FieldCanvas";
 import { ListFieldSettings } from "@/components/builder/ListFieldSettings";
 import { AggregationSettings } from "@/components/builder/AggregationSettings";
@@ -19,7 +23,7 @@ import { generateFieldName } from "@/lib/utils";
 import { sanitizeListFieldIds } from "@/lib/records/getListDisplayFields";
 import { snapFieldWidth } from "@/types";
 import type { App, AppField, FieldType } from "@/types";
-import { ArrowLeft, Save, Plus } from "lucide-react";
+import { Save, Plus } from "lucide-react";
 
 type PanelMode = "idle" | "add" | "edit";
 
@@ -233,86 +237,82 @@ export default function AppBuilderPage() {
   if (!app) return <p className="text-gray-500">読み込み中...</p>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/tenant/apps" className="text-gray-400 hover:text-gray-600 shrink-0">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-bold break-words">{app.name} — フォーム設計</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              ドラッグで並び替え、右端をドラッグで幅調整（10%刻み）
-            </p>
+    <PageFrame>
+      <PageHeader
+        title={`${app.name} — フォーム設計`}
+        description="ドラッグで並び替え、右端をドラッグで幅調整（10%刻み）"
+        backHref="/tenant/apps"
+        actions={
+          <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto shrink-0">
+            <Save className="w-4 h-4 mr-1" />
+            {saving ? "保存中..." : saved ? "保存しました!" : "保存"}
+          </Button>
+        }
+      />
+
+      <PageBody className="space-y-4">
+        {saveError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            {saveError}
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8">
+            <PageSection
+              title="フォームプレビュー"
+              action={
+                <Button size="sm" onClick={startAddField} disabled={panelMode === "add"}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  フィールド追加
+                </Button>
+              }
+            >
+              <FieldCanvas
+                fields={fields}
+                selectedId={selectedId}
+                onSelect={selectField}
+                onReorder={setFields}
+                onWidthChange={(id, width) => {
+                  setFields(fields.map((f) => (f.id === id ? { ...f, width } : f)));
+                }}
+                onDelete={deleteField}
+              />
+            </PageSection>
+          </div>
+
+          <div className="lg:col-span-4 space-y-8">
+            <PageSection title="設定">
+              <FieldSettingsPanel
+                mode={panelMode}
+                field={panelField}
+                allFields={fields}
+                allApps={allApps}
+                tenantId={tenantId}
+                onFieldChange={updateField}
+                onTypeChange={changeDraftType}
+                onConfirmAdd={confirmAddField}
+                onCancelAdd={cancelAddField}
+                onDelete={
+                  selectedField ? () => deleteField(selectedField.id) : undefined
+                }
+              />
+            </PageSection>
+
+            <PageSection title="一覧表示" bordered>
+              <ListFieldSettings
+                fields={fields}
+                listFieldIds={listFieldIds}
+                onChange={setListFieldIds}
+              />
+            </PageSection>
+
+            <PageSection title="集計 / グラフ" bordered>
+              <AggregationSettings appId={appId} fields={fields} />
+            </PageSection>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto shrink-0">
-          <Save className="w-4 h-4 mr-1" />
-          {saving ? "保存中..." : saved ? "保存しました!" : "保存"}
-        </Button>
-      </div>
-
-      {saveError && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-          {saveError}
-        </p>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-8">
-          <Card
-            title="フォームプレビュー"
-            action={
-              <Button size="sm" onClick={startAddField} disabled={panelMode === "add"}>
-                <Plus className="w-4 h-4 mr-1" />
-                フィールド追加
-              </Button>
-            }
-          >
-            <FieldCanvas
-              fields={fields}
-              selectedId={selectedId}
-              onSelect={selectField}
-              onReorder={setFields}
-              onWidthChange={(id, width) => {
-                setFields(fields.map((f) => (f.id === id ? { ...f, width } : f)));
-              }}
-              onDelete={deleteField}
-            />
-          </Card>
-        </div>
-
-        <div className="lg:col-span-4 space-y-4">
-          <Card title="設定">
-            <FieldSettingsPanel
-              mode={panelMode}
-              field={panelField}
-              allFields={fields}
-              allApps={allApps}
-              tenantId={tenantId}
-              onFieldChange={updateField}
-              onTypeChange={changeDraftType}
-              onConfirmAdd={confirmAddField}
-              onCancelAdd={cancelAddField}
-              onDelete={
-                selectedField ? () => deleteField(selectedField.id) : undefined
-              }
-            />
-          </Card>
-
-          <Card title="一覧表示">
-            <ListFieldSettings
-              fields={fields}
-              listFieldIds={listFieldIds}
-              onChange={setListFieldIds}
-            />
-          </Card>
-
-          <Card title="集計 / グラフ">
-            <AggregationSettings appId={appId} fields={fields} />
-          </Card>
-        </div>
-      </div>
-    </div>
+      </PageBody>
+    </PageFrame>
   );
 }

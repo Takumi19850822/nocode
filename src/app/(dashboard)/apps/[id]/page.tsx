@@ -5,9 +5,14 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
+import {
+  PageBody,
+  PageFrame,
+  PageHeader,
+  PageSection,
+} from "@/components/layout/PageLayout";
 import { RecordFormFields } from "@/components/records/RecordFormFields";
 import { RecordDeleteModal } from "@/components/records/RecordDeleteModal";
 import { AggregationView } from "@/components/records/AggregationView";
@@ -23,7 +28,7 @@ import type {
   SearchFieldConfig,
   DateFieldConfig,
 } from "@/types";
-import { Plus, Trash2, Eye } from "lucide-react";
+import { Plus, Trash2, Eye, FileSpreadsheet } from "lucide-react";
 
 export default function AppRuntimePage() {
   const params = useParams();
@@ -277,121 +282,135 @@ export default function AppRuntimePage() {
   const allRecordIds = records.map((r) => r.id);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold break-words">{app.name}</h1>
-          {app.description && <p className="text-gray-500 text-sm mt-1 break-words">{app.description}</p>}
-        </div>
-        <Button onClick={openNewRecordForm} className="w-full sm:w-auto shrink-0">
-          <Plus className="w-4 h-4 mr-1" />
-          新規レコード
-        </Button>
-      </div>
-
-      {showForm && (
-        <Card title="新規レコード">
-          <form onSubmit={handleSubmit}>
-            <RecordFormFields
-              fields={fields}
-              formValues={formValues}
-              onValuesChange={setFormValues}
-              currentUserName={currentUserName}
-              searchQuery={searchQuery}
-              onSearchQueryChange={(fieldId, q) =>
-                setSearchQuery((prev) => ({ ...prev, [fieldId]: q }))
-              }
-              searchResults={searchResults}
-              onSearch={handleSearch}
-              onApplySearchResult={applySearchResult}
-            />
-            <div className="flex gap-2 mt-4">
-              <Button type="submit">保存</Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setShowForm(false);
-                  setSubmitError("");
-                }}
-              >
-                キャンセル
+    <PageFrame>
+      <PageHeader
+        title={app.name}
+        description={app.description || undefined}
+        actions={
+          <>
+            <Link href={`/apps/${appId}/export`}>
+              <Button variant="excel" className="w-full sm:w-auto">
+                <FileSpreadsheet className="w-4 h-4 mr-1" />
+                Excel出力
               </Button>
-            </div>
-            {submitError && <p className="text-sm text-red-600 mt-3">{submitError}</p>}
-          </form>
-        </Card>
-      )}
+            </Link>
+            <Button onClick={openNewRecordForm} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-1" />
+              新規レコード
+            </Button>
+          </>
+        }
+      />
 
-      {aggregations.length > 0 && (
-        <Card
-          title="グラフ / 集計"
-          action={
-            <div className="w-full sm:w-48">
-              <Select
-                value={selectedAggId}
-                onChange={(e) => setSelectedAggId(e.target.value)}
-                options={[
-                  { label: "選択してください", value: "" },
-                  ...aggregations.map((a) => ({ label: a.name, value: a.id })),
-                ]}
+      <PageBody>
+        {showForm && (
+          <PageSection title="新規レコード">
+            <form onSubmit={handleSubmit}>
+              <RecordFormFields
+                fields={fields}
+                formValues={formValues}
+                onValuesChange={setFormValues}
+                currentUserName={currentUserName}
+                searchQuery={searchQuery}
+                onSearchQueryChange={(fieldId, q) =>
+                  setSearchQuery((prev) => ({ ...prev, [fieldId]: q }))
+                }
+                searchResults={searchResults}
+                onSearch={handleSearch}
+                onApplySearchResult={applySearchResult}
+              />
+              <div className="flex gap-2 mt-4">
+                <Button type="submit">保存</Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowForm(false);
+                    setSubmitError("");
+                  }}
+                >
+                  キャンセル
+                </Button>
+              </div>
+              {submitError && <p className="text-sm text-red-600 mt-3">{submitError}</p>}
+            </form>
+          </PageSection>
+        )}
+
+        {aggregations.length > 0 && (
+          <PageSection
+            title="グラフ / 集計"
+            action={
+              <div className="w-full sm:w-48">
+                <Select
+                  value={selectedAggId}
+                  onChange={(e) => setSelectedAggId(e.target.value)}
+                  options={[
+                    { label: "選択してください", value: "" },
+                    ...aggregations.map((a) => ({ label: a.name, value: a.id })),
+                  ]}
+                />
+              </div>
+            }
+            bordered={showForm}
+          >
+            {selectedAgg ? (
+              <AggregationView
+                aggregation={selectedAgg}
+                fields={fields}
+                recordIds={allRecordIds}
+              />
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-6">
+                上のプルダウンからグラフを選択してください
+              </p>
+            )}
+          </PageSection>
+        )}
+
+        <PageSection
+          title={`レコード一覧 (${records.length}件)`}
+          bordered={showForm || aggregations.length > 0}
+        >
+          {records.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">レコードがありません</p>
+          ) : (
+            <div>
+              <div className="scroll-table-wrap">
+                <table className="scroll-table text-sm">
+                  <thead>
+                    <tr>
+                      {listFields.map((f) => (
+                        <th key={f.id}>{f.label}</th>
+                      ))}
+                      <th>作成日</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedRecords.map((record) => (
+                      <RecordRow
+                        key={record.id}
+                        appId={appId}
+                        record={record}
+                        fields={listFields}
+                        values={valuesByRecord[record.id] ?? {}}
+                        onDelete={() => setDeleteRecordId(record.id)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={records.length}
+                onPageChange={setPage}
               />
             </div>
-          }
-        >
-          {selectedAgg ? (
-            <AggregationView
-              aggregation={selectedAgg}
-              fields={fields}
-              recordIds={allRecordIds}
-            />
-          ) : (
-            <p className="text-sm text-gray-400 text-center py-6">
-              上のプルダウンからグラフを選択してください
-            </p>
           )}
-        </Card>
-      )}
-
-      <Card title={`レコード一覧 (${records.length}件)`}>
-        {records.length === 0 ? (
-          <p className="text-gray-400 text-center py-8">レコードがありません</p>
-        ) : (
-          <div>
-            <div className="scroll-table-wrap">
-              <table className="scroll-table text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500">
-                    {listFields.map((f) => (
-                      <th key={f.id} className="font-medium">{f.label}</th>
-                    ))}
-                    <th className="font-medium">作成日</th>
-                    <th className="font-medium">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedRecords.map((record) => (
-                    <RecordRow
-                      key={record.id}
-                      appId={appId}
-                      record={record}
-                      fields={listFields}
-                      values={valuesByRecord[record.id] ?? {}}
-                      onDelete={() => setDeleteRecordId(record.id)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={records.length}
-              onPageChange={setPage}
-            />
-          </div>
-        )}
-      </Card>
+        </PageSection>
+      </PageBody>
 
       <RecordDeleteModal
         appId={appId}
@@ -400,7 +419,7 @@ export default function AppRuntimePage() {
         onClose={() => setDeleteRecordId(null)}
         onDeleted={loadApp}
       />
-    </div>
+    </PageFrame>
   );
 }
 
@@ -417,28 +436,27 @@ function RecordRow({
   values: Record<string, string>;
   onDelete: () => void;
 }) {
+  const detailHref = `/apps/${appId}/records/${record.id}`;
+
   return (
     <tr>
       {fields.map((f) => (
         <td key={f.id}>
-          <Link
-            href={`/apps/${appId}/records/${record.id}`}
-            className="text-blue-600 hover:underline"
-          >
+          <Link href={detailHref}>
             {formatFieldDisplayValue(f, values[f.id])}
           </Link>
         </td>
       ))}
       <td className="text-gray-500">
-        <Link href={`/apps/${appId}/records/${record.id}`} className="hover:underline">
+        <Link href={detailHref}>
           {new Date(record.created_at).toLocaleDateString("ja-JP")}
         </Link>
       </td>
       <td>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <Link
-            href={`/apps/${appId}/records/${record.id}`}
-            className="text-gray-400 hover:text-blue-600 p-1"
+            href={detailHref}
+            className="inline-flex items-center justify-center w-7 h-7 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
             title="詳細"
           >
             <Eye className="w-4 h-4" />
@@ -446,7 +464,7 @@ function RecordRow({
           <button
             type="button"
             onClick={onDelete}
-            className="text-gray-400 hover:text-red-600 p-1"
+            className="inline-flex items-center justify-center w-7 h-7 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
             title="削除"
           >
             <Trash2 className="w-4 h-4" />

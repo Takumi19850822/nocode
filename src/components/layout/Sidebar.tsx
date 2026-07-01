@@ -13,6 +13,7 @@ import {
   ChevronsUpDown,
   PanelLeftClose,
   PanelLeftOpen,
+  FileSpreadsheet,
 } from "lucide-react";
 import { getProfileDisplayName } from "@/lib/auth/profileDisplayName";
 import { cn } from "@/lib/utils";
@@ -135,15 +136,16 @@ export function Sidebar({ profile, apps, forceExpanded = false, onNavigate }: Si
         {isSuperAdmin && (
           <NavSection label="Admin" collapsed={collapsed}>
             {adminLinks.map((link) => (
-              <NavItem
-                key={link.href}
-                href={link.href}
-                label={link.label}
-                icon={link.icon}
-                active={pathname.startsWith(link.href)}
-                collapsed={collapsed}
-                onNavigate={onNavigate}
-              />
+              <li key={link.href}>
+                <NavItem
+                  href={link.href}
+                  label={link.label}
+                  icon={link.icon}
+                  active={pathname.startsWith(link.href)}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              </li>
             ))}
           </NavSection>
         )}
@@ -151,15 +153,16 @@ export function Sidebar({ profile, apps, forceExpanded = false, onNavigate }: Si
         {showTenantMenu && (
           <NavSection label="テナント管理" collapsed={collapsed}>
             {tenantLinks.map((link) => (
-              <NavItem
-                key={link.href}
-                href={link.href}
-                label={link.label}
-                icon={link.icon}
-                active={pathname.startsWith(link.href)}
-                collapsed={collapsed}
-                onNavigate={onNavigate}
-              />
+              <li key={link.href}>
+                <NavItem
+                  href={link.href}
+                  label={link.label}
+                  icon={link.icon}
+                  active={pathname.startsWith(link.href)}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              </li>
             ))}
           </NavSection>
         )}
@@ -167,16 +170,36 @@ export function Sidebar({ profile, apps, forceExpanded = false, onNavigate }: Si
         {apps.length > 0 && (
           <NavSection label="アプリ" collapsed={collapsed}>
             {apps.map((app) => (
+              <li key={app.id}>
+                <NavItem
+                  href={`/apps/${app.id}`}
+                  label={app.name}
+                  icon={LayoutGrid}
+                  active={
+                    pathname === `/apps/${app.id}` ||
+                    pathname.startsWith(`/apps/${app.id}/records/`) ||
+                    pathname === `/apps/${app.id}/export`
+                  }
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              </li>
+            ))}
+          </NavSection>
+        )}
+
+        {profile.tenant_id && (
+          <NavSection label="データ" collapsed={collapsed}>
+            <li>
               <NavItem
-                key={app.id}
-                href={`/apps/${app.id}`}
-                label={app.name}
-                icon={LayoutGrid}
-                active={pathname.startsWith(`/apps/${app.id}`)}
+                href="/exports"
+                label="Excel出力"
+                icon={FileSpreadsheet}
+                active={pathname === "/exports" || pathname.startsWith("/exports/")}
                 collapsed={collapsed}
                 onNavigate={onNavigate}
               />
-            ))}
+            </li>
           </NavSection>
         )}
       </nav>
@@ -319,35 +342,38 @@ function TenantSwitcher({
 function NavItem({
   href,
   label,
+  title,
   icon: Icon,
   active,
   collapsed,
   onNavigate,
+  nested = false,
 }: {
   href: string;
   label: string;
+  title?: string;
   icon: React.ComponentType<{ className?: string }>;
   active: boolean;
   collapsed: boolean;
   onNavigate?: () => void;
+  nested?: boolean;
 }) {
   return (
-    <li>
-      <Link
-        href={href}
-        title={label}
-        onClick={onNavigate}
-        className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-          collapsed && "justify-center px-0",
-          active
-            ? "bg-sidebar-active text-white"
-            : "text-gray-300 hover:bg-sidebar-hover"
-        )}
-      >
-        <Icon className="w-4 h-4 shrink-0" />
-        {!collapsed && <span className="truncate">{label}</span>}
-      </Link>
-    </li>
+    <Link
+      href={href}
+      title={title ?? label}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+        collapsed && "justify-center px-0",
+        nested && !collapsed && "ml-4 py-1.5 text-xs",
+        active
+          ? "bg-sidebar-active text-white"
+          : "text-gray-300 hover:bg-sidebar-hover"
+      )}
+    >
+      <Icon className={cn("shrink-0", nested && !collapsed ? "w-3.5 h-3.5" : "w-4 h-4")} />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </Link>
   );
 }

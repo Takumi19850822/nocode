@@ -17,11 +17,13 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Select } from "@/components/ui/Input";
 import {
+  chartSeriesAxisLabel,
   chartXAxisLabel,
   computeAggregation,
   isDateRowAxis,
   measureLabel,
   resultToChartData,
+  usesRowSeriesPivot,
   type AggregationResult,
 } from "@/lib/aggregations/compute";
 import type {
@@ -129,8 +131,9 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
   const chartData = useMemo(() => resultToChartData(result), [result]);
   const measure = measureLabel(effectiveConfig, fields);
   const xAxisLabel = chartXAxisLabel(effectiveConfig, fields);
-  const isTimeSeries =
-    effectiveConfig.type === "simple" && isDateRowAxis(effectiveConfig, fields);
+  const seriesAxisLabel = chartSeriesAxisLabel(effectiveConfig, fields);
+  const isTimeSeries = isDateRowAxis(effectiveConfig, fields);
+  const rowPivot = usesRowSeriesPivot(effectiveConfig);
 
   if (loading) {
     return <p className="text-sm text-gray-400 py-6 text-center">集計中...</p>;
@@ -141,8 +144,15 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
   }
 
   const { display } = aggregation.config;
-  const chartHeight = isTimeSeries ? 360 : 340;
-  const chartBottomMargin = isTimeSeries ? 56 : 48;
+  const hasMultiSeries = result.colKeys.length > 1;
+  const chartHeight = hasMultiSeries ? 380 : 340;
+  const chartMargin = {
+    top: hasMultiSeries ? 44 : 12,
+    right: 12,
+    bottom: isTimeSeries || rowPivot ? 52 : 44,
+    left: 4,
+  };
+  const xAxisHeight = isTimeSeries ? 36 : 52;
 
   return (
     <div className="space-y-4 min-w-0">
@@ -179,14 +189,19 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
         <p className="text-sm text-amber-600">数値フィールドを選択してください。</p>
       )}
 
-      {isTimeSeries && display !== "table" && (
+      {rowPivot && display !== "table" && (
         <p className="text-xs text-gray-500">
-          日付を横軸（下）に、{measure}を縦軸に表示しています（単純集計）。
+          縦軸第一キー（{seriesAxisLabel}）で色分け、第二キー以降（{xAxisLabel}）を横軸（下）に表示しています。
         </p>
       )}
-      {effectiveConfig.type === "cross" && display !== "table" && (
+      {!rowPivot && isTimeSeries && display !== "table" && (
         <p className="text-xs text-gray-500">
-          クロス集計：横軸（下）は縦軸キー、系列は横軸キーごとに表示されます。
+          {xAxisLabel}を横軸（下）に、{measure}を縦軸に表示しています。
+        </p>
+      )}
+      {!rowPivot && effectiveConfig.type === "cross" && display !== "table" && (
+        <p className="text-xs text-gray-500">
+          クロス集計：横軸（下）は縦軸キー、系列（色）は横軸キーごとに表示されます。
         </p>
       )}
 
@@ -195,10 +210,7 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
       {!measureInvalid && display === "bar" && (
         <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 8, right: 8, bottom: chartBottomMargin, left: 0 }}
-            >
+            <BarChart data={chartData} margin={chartMargin}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
               <XAxis
                 dataKey="name"
@@ -206,9 +218,14 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
                 interval={0}
                 angle={isTimeSeries ? 0 : -25}
                 textAnchor={isTimeSeries ? "middle" : "end"}
-                height={isTimeSeries ? 48 : 60}
+                height={xAxisHeight}
               >
-                <Label value={xAxisLabel} offset={-4} position="insideBottom" fontSize={11} />
+                <Label
+                  value={xAxisLabel}
+                  offset={-2}
+                  position="insideBottom"
+                  fontSize={11}
+                />
               </XAxis>
               <YAxis tick={{ fontSize: 11 }} width={48}>
                 <Label
@@ -219,7 +236,10 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
                 />
               </YAxis>
               <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend
+                verticalAlign={hasMultiSeries ? "top" : "bottom"}
+                wrapperStyle={{ fontSize: 12, paddingBottom: hasMultiSeries ? 4 : 0 }}
+              />
               {result.colKeys.map((ck, i) => (
                 <Bar key={ck} dataKey={ck} fill={COLORS[i % COLORS.length]} />
               ))}
@@ -231,10 +251,7 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
       {!measureInvalid && display === "line" && (
         <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={chartData}
-              margin={{ top: 8, right: 8, bottom: chartBottomMargin, left: 0 }}
-            >
+            <LineChart data={chartData} margin={chartMargin}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
               <XAxis
                 dataKey="name"
@@ -242,9 +259,14 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
                 interval={0}
                 angle={isTimeSeries ? 0 : -25}
                 textAnchor={isTimeSeries ? "middle" : "end"}
-                height={isTimeSeries ? 48 : 60}
+                height={xAxisHeight}
               >
-                <Label value={xAxisLabel} offset={-4} position="insideBottom" fontSize={11} />
+                <Label
+                  value={xAxisLabel}
+                  offset={-2}
+                  position="insideBottom"
+                  fontSize={11}
+                />
               </XAxis>
               <YAxis tick={{ fontSize: 11 }} width={48}>
                 <Label
@@ -255,7 +277,10 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
                 />
               </YAxis>
               <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend
+                verticalAlign={hasMultiSeries ? "top" : "bottom"}
+                wrapperStyle={{ fontSize: 12, paddingBottom: hasMultiSeries ? 4 : 0 }}
+              />
               {result.colKeys.map((ck, i) => (
                 <Line
                   key={ck}
@@ -300,21 +325,21 @@ function AggregationTable({
 
   return (
     <div className="min-w-0">
-      <table className="agg-table w-full text-sm border-collapse">
+      <table className="agg-table w-full text-sm">
         <thead>
-          <tr className="border-b text-left text-gray-500">
-            <th className="py-2 pr-2 sm:pr-4 font-medium align-bottom"></th>
+          <tr>
+            <th className="align-bottom"></th>
             {showColHeader ? (
               colKeys.map((ck) => (
                 <th
                   key={ck}
-                  className="py-2 px-1 sm:px-3 font-medium text-right align-bottom"
+                  className="text-right align-bottom"
                 >
                   {ck}
                 </th>
               ))
             ) : (
-              <th className="py-2 px-1 sm:px-3 font-medium text-right align-bottom">
+              <th className="text-right align-bottom">
                 {colKeys[0]}
               </th>
             )}
@@ -322,19 +347,19 @@ function AggregationTable({
         </thead>
         <tbody>
           {rowKeys.map((rk) => (
-            <tr key={rk} className="border-b last:border-0">
-              <td className="py-2 pr-2 sm:pr-4 font-medium">{rk}</td>
+            <tr key={rk}>
+              <td className="font-medium">{rk}</td>
               {colKeys.map((ck) => (
-                <td key={ck} className="py-2 px-1 sm:px-3 text-right tabular-nums">
+                <td key={ck} className="text-right tabular-nums">
                   {fmt(matrix[rk]?.[ck] ?? 0)}
                 </td>
               ))}
             </tr>
           ))}
-          <tr className="border-t-2 border-gray-300 font-medium">
-            <td className="py-2 pr-2 sm:pr-4">合計</td>
+          <tr>
+            <td className="font-semibold">合計</td>
             {colKeys.map((ck) => (
-              <td key={ck} className="py-2 px-1 sm:px-3 text-right tabular-nums">
+              <td key={ck} className="text-right tabular-nums font-semibold">
                 {fmt(colTotals[ck])}
               </td>
             ))}
