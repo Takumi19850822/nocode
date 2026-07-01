@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient, getCurrentProfile } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/Sidebar";
 
+export const runtime = "edge";
+
 export default async function DashboardLayout({
   children,
 }: {
