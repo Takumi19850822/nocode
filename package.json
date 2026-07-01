@@ -7,10 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "pages:build": "npx @cloudflare/next-on-pages",
+    "pages:build": "npx @cloudflare/next-on-pages && node -e \"require('fs').writeFileSync('.vercel/output/static/.assetsignore','_worker.js\\n')\"",
     "pages:dev": "npx wrangler pages dev .vercel/output/static --compatibility-flag=nodejs_compat",
-    "pages:deploy": "wrangler pages deploy .vercel/output/static",
-    "deploy": "npm run pages:deploy",
+    "pages:deploy": "wrangler deploy",
+    "deploy": "wrangler deploy",
     "setup:supabase": "node scripts/setup-supabase.mjs",
     "test:connect": "node scripts/test-connect.mjs"
   },
