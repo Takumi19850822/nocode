@@ -6,15 +6,18 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Input";
 import { Pagination } from "@/components/ui/Pagination";
 import { RecordFormFields } from "@/components/records/RecordFormFields";
 import { RecordDeleteModal } from "@/components/records/RecordDeleteModal";
+import { AggregationView } from "@/components/records/AggregationView";
 import { formatFieldDisplayValue } from "@/lib/records/formatFieldValue";
 import { getListDisplayFields } from "@/lib/records/getListDisplayFields";
 import { getProfileDisplayName } from "@/lib/auth/profileDisplayName";
 import { todayDateString } from "@/lib/utils";
 import type {
   App,
+  AppAggregation,
   AppField,
   AppRecord,
   SearchFieldConfig,
@@ -32,6 +35,8 @@ export default function AppRuntimePage() {
   const [valuesByRecord, setValuesByRecord] = useState<
     Record<string, Record<string, string>>
   >({});
+  const [aggregations, setAggregations] = useState<AppAggregation[]>([]);
+  const [selectedAggId, setSelectedAggId] = useState("");
   const [page, setPage] = useState(1);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
@@ -94,13 +99,15 @@ export default function AppRuntimePage() {
     if (!appData) return;
     setApp(appData);
 
-    const [fieldsRes, recordsRes] = await Promise.all([
+    const [fieldsRes, recordsRes, aggRes] = await Promise.all([
       supabase.from("app_fields").select("*").eq("app_id", appId).order("sort_order"),
       supabase.from("app_records").select("*").eq("app_id", appId).order("created_at", { ascending: false }),
+      supabase.from("app_aggregations").select("*").eq("app_id", appId).order("sort_order"),
     ]);
 
     setFields(fieldsRes.data ?? []);
     setRecords(recordsRes.data ?? []);
+    setAggregations((aggRes.data as AppAggregation[] | null) ?? []);
     setPage(1);
   }
 
@@ -266,6 +273,8 @@ export default function AppRuntimePage() {
 
   const listFields = getListDisplayFields(fields, app.list_field_ids);
   const pagedRecords = records.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const selectedAgg = aggregations.find((a) => a.id === selectedAggId) ?? null;
+  const allRecordIds = records.map((r) => r.id);
 
   return (
     <div className="space-y-6">
@@ -311,6 +320,36 @@ export default function AppRuntimePage() {
             </div>
             {submitError && <p className="text-sm text-red-600 mt-3">{submitError}</p>}
           </form>
+        </Card>
+      )}
+
+      {aggregations.length > 0 && (
+        <Card
+          title="グラフ / 集計"
+          action={
+            <div className="w-48">
+              <Select
+                value={selectedAggId}
+                onChange={(e) => setSelectedAggId(e.target.value)}
+                options={[
+                  { label: "選択してください", value: "" },
+                  ...aggregations.map((a) => ({ label: a.name, value: a.id })),
+                ]}
+              />
+            </div>
+          }
+        >
+          {selectedAgg ? (
+            <AggregationView
+              aggregation={selectedAgg}
+              fields={fields}
+              recordIds={allRecordIds}
+            />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-6">
+              上のプルダウンからグラフを選択してください
+            </p>
+          )}
         </Card>
       )}
 

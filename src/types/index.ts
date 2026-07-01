@@ -120,6 +120,8 @@ export interface AppField {
   is_required: boolean;
   sort_order: number;
   width: number;
+  /** true の場合、このフィールドから新しい行を開始する（行区切り） */
+  break_before: boolean;
   placeholder: string;
   default_value: string;
   options: FieldOption[];
@@ -169,6 +171,52 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   login_user: "ログインユーザ氏名",
 };
 
+// ===== 集計 / グラフ =====
+
+/** 日付キーの粒度 */
+export type DateUnit = "day" | "month";
+
+/** 集計値（メジャー） */
+export type AggregationMeasure =
+  | { kind: "count" }
+  | { kind: "sum"; field_id: string }
+  | { kind: "avg"; field_id: string };
+
+/** 集計の軸（キー）。date_unit は対象が日付/日時フィールドの場合のみ有効。 */
+export interface AggregationAxis {
+  field_id: string;
+  date_unit?: DateUnit;
+}
+
+/** 表示形式 */
+export type AggregationDisplay = "table" | "bar" | "line";
+
+/** 集計定義の設定本体（app_aggregations.config） */
+export interface AggregationConfig {
+  /** 単純集計 or クロス集計 */
+  type: "simple" | "cross";
+  /** 縦軸（第一の集計キー） */
+  row: AggregationAxis;
+  /** 横軸 第一キー（クロス集計時） */
+  col?: AggregationAxis;
+  /** 横軸 第二キー（クロス集計時・任意） */
+  col2?: AggregationAxis;
+  /** 集計値 */
+  measure: AggregationMeasure;
+  /** 表示形式 */
+  display: AggregationDisplay;
+}
+
+export interface AppAggregation {
+  id: string;
+  app_id: string;
+  name: string;
+  config: AggregationConfig;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export const GRID_COLUMNS = 10;
 export const FIELD_WIDTH_STEP = 10;
 export const FIELD_WIDTH_MIN = 10;
@@ -181,6 +229,15 @@ export type FieldWidth = (typeof FIELD_WIDTH_OPTIONS)[number];
 /** 10列グリッド（10%単位）の span */
 export function widthToGridSpan(width: number): number {
   return Math.max(1, Math.min(GRID_COLUMNS, Math.round(width / FIELD_WIDTH_STEP)));
+}
+
+/**
+ * フィールドの grid-column を計算。break_before の場合は列1から開始して
+ * 新しい行に折り返す。スマホ（grid-cols-1）では span がクランプされ縦1列になる。
+ */
+export function fieldGridColumn(width: number, breakBefore: boolean): string {
+  const span = widthToGridSpan(width);
+  return breakBefore ? `1 / span ${span}` : `span ${span} / span ${span}`;
 }
 
 export function snapFieldWidth(percent: number): number {

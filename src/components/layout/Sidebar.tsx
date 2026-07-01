@@ -23,21 +23,27 @@ import { useRouter } from "next/navigation";
 interface SidebarProps {
   profile: SessionProfile;
   apps: { id: string; name: string; icon: string }[];
+  /** モバイルのドロワー表示時など、常に展開したい場合 */
+  forceExpanded?: boolean;
+  /** ナビゲーション操作時（モバイルでドロワーを閉じる等） */
+  onNavigate?: () => void;
 }
 
 const COLLAPSE_KEY = "sidebar-collapsed";
 
-export function Sidebar({ profile, apps }: SidebarProps) {
+export function Sidebar({ profile, apps, forceExpanded = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsedState, setCollapsedState] = useState(false);
 
   useEffect(() => {
-    setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+    setCollapsedState(localStorage.getItem(COLLAPSE_KEY) === "1");
   }, []);
 
+  const collapsed = forceExpanded ? false : collapsedState;
+
   function toggleCollapsed() {
-    setCollapsed((prev) => {
+    setCollapsedState((prev) => {
       const next = !prev;
       localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
       return next;
@@ -63,6 +69,7 @@ export function Sidebar({ profile, apps }: SidebarProps) {
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    onNavigate?.();
     router.push("/login");
   }
 
@@ -91,7 +98,7 @@ export function Sidebar({ profile, apps }: SidebarProps) {
             </span>
           )}
         </Link>
-        {!collapsed && (
+        {!collapsed && !forceExpanded && (
           <button
             onClick={toggleCollapsed}
             className="text-gray-400 hover:text-white p-1 shrink-0"
@@ -102,7 +109,7 @@ export function Sidebar({ profile, apps }: SidebarProps) {
         )}
       </div>
 
-      {collapsed && (
+      {collapsed && !forceExpanded && (
         <button
           onClick={toggleCollapsed}
           className="flex justify-center py-2 text-gray-400 hover:text-white border-b border-white/10"
@@ -135,6 +142,7 @@ export function Sidebar({ profile, apps }: SidebarProps) {
                 icon={link.icon}
                 active={pathname.startsWith(link.href)}
                 collapsed={collapsed}
+                onNavigate={onNavigate}
               />
             ))}
           </NavSection>
@@ -150,6 +158,7 @@ export function Sidebar({ profile, apps }: SidebarProps) {
                 icon={link.icon}
                 active={pathname.startsWith(link.href)}
                 collapsed={collapsed}
+                onNavigate={onNavigate}
               />
             ))}
           </NavSection>
@@ -165,6 +174,7 @@ export function Sidebar({ profile, apps }: SidebarProps) {
                 icon={LayoutGrid}
                 active={pathname.startsWith(`/apps/${app.id}`)}
                 collapsed={collapsed}
+                onNavigate={onNavigate}
               />
             ))}
           </NavSection>
@@ -312,18 +322,21 @@ function NavItem({
   icon: Icon,
   active,
   collapsed,
+  onNavigate,
 }: {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   active: boolean;
   collapsed: boolean;
+  onNavigate?: () => void;
 }) {
   return (
     <li>
       <Link
         href={href}
         title={label}
+        onClick={onNavigate}
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
           collapsed && "justify-center px-0",

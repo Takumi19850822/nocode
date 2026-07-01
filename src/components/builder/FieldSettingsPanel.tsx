@@ -112,6 +112,7 @@ export function createDraftField(appId: string, sortOrder: number, type: FieldTy
     is_required: false,
     sort_order: sortOrder,
     width: 100,
+    break_before: false,
     placeholder: "",
     default_value: "",
     options,

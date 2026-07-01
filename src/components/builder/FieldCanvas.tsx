@@ -20,7 +20,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Trash2, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FIELD_TYPE_LABELS, widthToGridSpan, GRID_COLUMNS, FIELD_WIDTH_STEP, snapFieldWidth } from "@/types";
+import { FIELD_TYPE_LABELS, fieldGridColumn, GRID_COLUMNS, FIELD_WIDTH_STEP, snapFieldWidth } from "@/types";
 import type { AppField } from "@/types";
 import { Badge } from "@/components/ui/Card";
 
@@ -112,12 +112,10 @@ function SortableField({
     id: field.id,
   });
 
-  const span = widthToGridSpan(field.width);
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition: resizing ? undefined : transition,
-    gridColumn: `span ${span} / span ${span}`,
+    gridColumn: fieldGridColumn(field.width, field.break_before),
   };
 
   const mergeRef = useCallback(

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { evaluateExpression, formatNumberWithCommas, stripNumberCommas } from "@/lib/utils";
-import { widthToGridSpan } from "@/types";
+import { fieldGridColumn } from "@/types";
 import type {
   AppField,
   CalculationFieldConfig,
@@ -61,7 +61,7 @@ export function RecordFormFields({
       <div
         key={field.id}
         style={{
-          gridColumn: `span ${widthToGridSpan(field.width)} / span ${widthToGridSpan(field.width)}`,
+          gridColumn: fieldGridColumn(field.width, field.break_before),
         }}
         className="min-w-0"
       >
@@ -71,7 +71,7 @@ export function RecordFormFields({
   }
 
   return (
-    <div className="grid grid-cols-10 gap-3 auto-rows-min">
+    <div className="grid grid-cols-1 sm:grid-cols-10 gap-3 auto-rows-min">
       {fields.map((field) => {
         const value = formValues[field.id] ?? "";
 

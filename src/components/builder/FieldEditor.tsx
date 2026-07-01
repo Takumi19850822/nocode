@@ -95,6 +95,11 @@ export function FieldEditor({
         checked={field.is_required}
         onChange={(e) => update({ is_required: e.target.checked })}
       />
+      <Checkbox
+        label="このフィールドから改行する（新しい行に配置）"
+        checked={field.break_before ?? false}
+        onChange={(e) => update({ break_before: e.target.checked })}
+      />
 
       {field.field_type === "date" && (
         <Checkbox

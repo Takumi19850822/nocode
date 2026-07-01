@@ -1,7 +1,7 @@
 "use client";
 
 import { formatFieldDisplayValue } from "@/lib/records/formatFieldValue";
-import { widthToGridSpan } from "@/types";
+import { fieldGridColumn } from "@/types";
 import type { AppField } from "@/types";
 
 interface RecordDetailViewProps {
@@ -11,12 +11,12 @@ interface RecordDetailViewProps {
 
 export function RecordDetailView({ fields, values }: RecordDetailViewProps) {
   return (
-    <div className="grid grid-cols-10 gap-4 auto-rows-min">
+    <div className="grid grid-cols-1 sm:grid-cols-10 gap-4 auto-rows-min">
       {fields.map((field) => (
         <div
           key={field.id}
           style={{
-            gridColumn: `span ${widthToGridSpan(field.width)} / span ${widthToGridSpan(field.width)}`,
+            gridColumn: fieldGridColumn(field.width, field.break_before),
           }}
           className="min-w-0"
         >

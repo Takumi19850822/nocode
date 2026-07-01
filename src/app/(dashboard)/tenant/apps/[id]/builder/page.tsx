@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FieldCanvas } from "@/components/builder/FieldCanvas";
 import { ListFieldSettings } from "@/components/builder/ListFieldSettings";
+import { AggregationSettings } from "@/components/builder/AggregationSettings";
 import {
   FieldSettingsPanel,
   createDraftField,
@@ -63,7 +64,13 @@ export default function AppBuilderPage() {
       supabase.from("apps").select("id, name").eq("tenant_id", appData.tenant_id),
     ]);
 
-    setFields(fieldsRes.data?.map((f) => ({ ...f, width: snapFieldWidth(f.width) })) ?? []);
+    setFields(
+      fieldsRes.data?.map((f) => ({
+        ...f,
+        width: snapFieldWidth(f.width),
+        break_before: f.break_before ?? false,
+      })) ?? []
+    );
     setAllApps(appsRes.data ?? []);
   }
 
@@ -169,6 +176,7 @@ export default function AppBuilderPage() {
         is_required: f.is_required,
         sort_order: i,
         width: snapFieldWidth(f.width),
+        break_before: f.break_before ?? false,
         placeholder: f.placeholder,
         default_value: f.default_value,
         options: f.options,
@@ -250,8 +258,8 @@ export default function AppBuilderPage() {
         </p>
       )}
 
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-8">
           <Card
             title="フォームプレビュー"
             action={
@@ -274,7 +282,7 @@ export default function AppBuilderPage() {
           </Card>
         </div>
 
-        <div className="col-span-4 space-y-4">
+        <div className="lg:col-span-4 space-y-4">
           <Card title="設定">
             <FieldSettingsPanel
               mode={panelMode}
@@ -298,6 +306,10 @@ export default function AppBuilderPage() {
               listFieldIds={listFieldIds}
               onChange={setListFieldIds}
             />
+          </Card>
+
+          <Card title="集計 / グラフ">
+            <AggregationSettings appId={appId} fields={fields} />
           </Card>
         </div>
       </div>
