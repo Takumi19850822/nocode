@@ -1,8 +1,5 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/supabase/server";
-
-export const runtime = "edge";
-
 export default async function AdminLayout({
   children,
 }: {

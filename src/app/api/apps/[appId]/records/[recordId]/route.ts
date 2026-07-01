@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { RecordReference } from "@/types";
-
-export const runtime = "edge";
-
 type RouteContext = {
   params: Promise<{ appId: string; recordId: string }>;
 };

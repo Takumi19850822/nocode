@@ -3,9 +3,6 @@ import { canAssignRole, canManageTenantAdmins, requireTenantManager } from "@/li
 import { createAdminClient, hasAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types";
-
-export const runtime = "edge";
-
 type RouteContext = { params: Promise<{ tenantId: string }> };
 
 export async function GET(_req: Request, context: RouteContext) {

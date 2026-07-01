@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-
-export const runtime = "edge";
-
 export const metadata: Metadata = {
   title: "NoCode Platform",
   description: "マルチテナント ノーコードツール",
