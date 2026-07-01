@@ -54,7 +54,6 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
     }
     let cancelled = false;
     setLoading(true);
-    // 集計は全レコードの値が必要。まとめて取得（チャンク分割で in 制限を回避）
     (async () => {
       const map: Record<string, Record<string, string>> = {};
       const CHUNK = 300;
@@ -98,20 +97,27 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
   const { display } = aggregation.config;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       <p className="text-xs text-gray-500">集計値: {measure}</p>
 
       {display === "table" && <AggregationTable result={result} />}
 
       {display === "bar" && (
-        <div className="w-full" style={{ height: 340 }}>
+        <div className="w-full min-w-0 overflow-hidden" style={{ height: 340 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+            <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11 }}
+                interval={0}
+                angle={-25}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis tick={{ fontSize: 11 }} width={40} />
               <Tooltip />
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
               {result.colKeys.map((ck, i) => (
                 <Bar key={ck} dataKey={ck} fill={COLORS[i % COLORS.length]} />
               ))}
@@ -121,14 +127,21 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
       )}
 
       {display === "line" && (
-        <div className="w-full" style={{ height: 340 }}>
+        <div className="w-full min-w-0 overflow-hidden" style={{ height: 340 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+            <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11 }}
+                interval={0}
+                angle={-25}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis tick={{ fontSize: 11 }} width={40} />
               <Tooltip />
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
               {result.colKeys.map((ck, i) => (
                 <Line
                   key={ck}
@@ -144,7 +157,6 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
         </div>
       )}
 
-      {/* グラフ表示時も数値表を併記 */}
       {display !== "table" && <AggregationTable result={result} />}
     </div>
   );
@@ -163,14 +175,14 @@ function AggregationTable({ result }: { result: AggregationResult }) {
     Number.isInteger(n) ? n.toLocaleString() : (Math.round(n * 100) / 100).toLocaleString();
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
+    <div className="min-w-0">
+      <table className="stack-table w-full text-sm border-collapse">
         <thead>
           <tr className="border-b text-left text-gray-500">
             <th className="py-2 pr-4 font-medium"></th>
             {showColHeader ? (
               colKeys.map((ck) => (
-                <th key={ck} className="py-2 px-3 font-medium text-right whitespace-nowrap">
+                <th key={ck} className="py-2 px-3 font-medium text-right break-words">
                   {ck}
                 </th>
               ))
@@ -182,18 +194,22 @@ function AggregationTable({ result }: { result: AggregationResult }) {
         <tbody>
           {rowKeys.map((rk) => (
             <tr key={rk} className="border-b last:border-0">
-              <td className="py-2 pr-4 font-medium whitespace-nowrap">{rk}</td>
+              <td className="py-2 pr-4 font-medium break-words" data-label="項目">
+                {rk}
+              </td>
               {colKeys.map((ck) => (
-                <td key={ck} className="py-2 px-3 text-right tabular-nums">
+                <td key={ck} className="py-2 px-3 text-right tabular-nums break-words" data-label={ck}>
                   {fmt(matrix[rk]?.[ck] ?? 0)}
                 </td>
               ))}
             </tr>
           ))}
           <tr className="border-t-2 border-gray-300 font-medium">
-            <td className="py-2 pr-4">合計</td>
+            <td className="py-2 pr-4" data-label="項目">
+              合計
+            </td>
             {colKeys.map((ck) => (
-              <td key={ck} className="py-2 px-3 text-right tabular-nums">
+              <td key={ck} className="py-2 px-3 text-right tabular-nums break-words" data-label={ck}>
                 {fmt(colTotals[ck])}
               </td>
             ))}

@@ -63,7 +63,7 @@ export function RecordFormFields({
         style={{
           gridColumn: fieldGridColumn(field.width, field.break_before),
         }}
-        className="min-w-0"
+        className="field-layout-item min-w-0"
       >
         {content}
       </div>
@@ -71,7 +71,7 @@ export function RecordFormFields({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-10 gap-3 auto-rows-min">
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 auto-rows-min">
       {fields.map((field) => {
         const value = formValues[field.id] ?? "";
 

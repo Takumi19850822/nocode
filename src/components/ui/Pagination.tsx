@@ -19,11 +19,11 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
   const to = Math.min(page * pageSize, total);
 
   return (
-    <div className="flex items-center justify-between gap-2 pt-4 mt-2 border-t border-gray-100 text-sm">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-4 mt-2 border-t border-gray-100 text-sm">
       <span className="text-gray-500">
         {from}–{to} / {total}件
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-center sm:justify-end gap-1">
         <button
           type="button"
           onClick={() => onPageChange(page - 1)}

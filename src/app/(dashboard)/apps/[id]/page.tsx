@@ -278,12 +278,12 @@ export default function AppRuntimePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{app.name}</h1>
-          {app.description && <p className="text-gray-500 text-sm mt-1">{app.description}</p>}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold break-words">{app.name}</h1>
+          {app.description && <p className="text-gray-500 text-sm mt-1 break-words">{app.description}</p>}
         </div>
-        <Button onClick={openNewRecordForm}>
+        <Button onClick={openNewRecordForm} className="w-full sm:w-auto shrink-0">
           <Plus className="w-4 h-4 mr-1" />
           新規レコード
         </Button>
@@ -327,7 +327,7 @@ export default function AppRuntimePage() {
         <Card
           title="グラフ / 集計"
           action={
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <Select
                 value={selectedAggId}
                 onChange={(e) => setSelectedAggId(e.target.value)}
@@ -357,8 +357,8 @@ export default function AppRuntimePage() {
         {records.length === 0 ? (
           <p className="text-gray-400 text-center py-8">レコードがありません</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div>
+            <table className="stack-table w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-gray-500">
                   {listFields.map((f) => (
@@ -418,21 +418,21 @@ function RecordRow({
   return (
     <tr className="border-b last:border-0 hover:bg-gray-50">
       {fields.map((f) => (
-        <td key={f.id} className="py-2">
+        <td key={f.id} className="py-2" data-label={f.label}>
           <Link
             href={`/apps/${appId}/records/${record.id}`}
-            className="text-blue-600 hover:underline"
+            className="text-blue-600 hover:underline break-words"
           >
             {formatFieldDisplayValue(f, values[f.id])}
           </Link>
         </td>
       ))}
-      <td className="py-2 text-gray-500">
+      <td className="py-2 text-gray-500" data-label="作成日">
         <Link href={`/apps/${appId}/records/${record.id}`} className="hover:underline">
           {new Date(record.created_at).toLocaleDateString("ja-JP")}
         </Link>
       </td>
-      <td className="py-2">
+      <td className="py-2" data-label="操作">
         <div className="flex items-center gap-1">
           <Link
             href={`/apps/${appId}/records/${record.id}`}

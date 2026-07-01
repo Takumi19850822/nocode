@@ -93,20 +93,19 @@ export default function AdminTenantsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">テナント管理</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">テナント管理</h1>
           <p className="text-gray-500 text-sm mt-1">Admin &gt; テナント</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="w-full sm:w-auto shrink-0">
           <Plus className="w-4 h-4 mr-1" />
           新規テナント
         </Button>
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <table className="stack-table w-full text-sm">
             <thead>
               <tr className="border-b text-left text-gray-500">
                 <th className="pb-3 font-medium">名前</th>
@@ -119,19 +118,19 @@ export default function AdminTenantsPage() {
             <tbody>
               {pagedTenants.map((tenant) => (
                 <tr key={tenant.id} className="border-b last:border-0">
-                  <td className="py-3 font-medium">{tenant.name}</td>
-                  <td className="py-3 text-gray-500">{tenant.slug}</td>
-                  <td className="py-3">
+                  <td className="py-3 font-medium" data-label="名前">{tenant.name}</td>
+                  <td className="py-3 text-gray-500 break-all" data-label="スラッグ">{tenant.slug}</td>
+                  <td className="py-3" data-label="状態">
                     <button onClick={() => toggleActive(tenant)}>
                       <Badge variant={tenant.is_active ? "success" : "danger"}>
                         {tenant.is_active ? "有効" : "無効"}
                       </Badge>
                     </button>
                   </td>
-                  <td className="py-3 text-gray-500">
+                  <td className="py-3 text-gray-500" data-label="作成日">
                     {new Date(tenant.created_at).toLocaleDateString("ja-JP")}
                   </td>
-                  <td className="py-3">
+                  <td className="py-3" data-label="操作">
                     <div className="flex gap-2">
                       <Link
                         href={`/admin/tenants/${tenant.id}/users`}
@@ -178,7 +177,6 @@ export default function AdminTenantsPage() {
             total={tenants.length}
             onPageChange={setPage}
           />
-        </div>
       </Card>
 
       <Modal

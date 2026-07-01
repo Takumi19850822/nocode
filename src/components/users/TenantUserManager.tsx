@@ -357,8 +357,7 @@ function UserTable({
 }) {
   return (
     <Card title={title}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <table className="stack-table w-full text-sm">
           <thead>
             <tr className="border-b text-left text-gray-500">
               <th className="pb-3 font-medium">名前</th>
@@ -370,16 +369,16 @@ function UserTable({
           <tbody>
             {users.map((user) => (
               <tr key={user.id} className="border-b last:border-0">
-                <td className="py-3 font-medium">{user.display_name?.trim() || "（未設定）"}</td>
-                <td className="py-3 text-gray-500">{user.email}</td>
-                <td className="py-3">
+                <td className="py-3 font-medium" data-label="名前">{user.display_name?.trim() || "（未設定）"}</td>
+                <td className="py-3 text-gray-500 break-all" data-label="メール">{user.email}</td>
+                <td className="py-3" data-label="状態">
                   <button onClick={() => onToggle(user)}>
                     <Badge variant={user.is_active ? "success" : "danger"}>
                       {user.is_active ? "有効" : "無効"}
                     </Badge>
                   </button>
                 </td>
-                <td className="py-3">
+                <td className="py-3" data-label="操作">
                   <div className="flex gap-2">
                     <button
                       onClick={() => onEdit(user)}
@@ -409,7 +408,6 @@ function UserTable({
           </tbody>
         </table>
         {footer}
-      </div>
     </Card>
   );
 }

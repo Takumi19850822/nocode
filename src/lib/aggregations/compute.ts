@@ -58,6 +58,36 @@ function sortKeys(keys: string[]): string[] {
   });
 }
 
+/** 設定から有効な縦軸キーを最大3つ取得 */
+export function getRowAxes(config: AggregationConfig): AggregationAxis[] {
+  const axes = [config.row];
+  if (config.row2) axes.push(config.row2);
+  if (config.row3) axes.push(config.row3);
+  return axes;
+}
+
+/** 設定から有効な横軸キーを最大3つ取得（クロス集計時） */
+export function getColAxes(config: AggregationConfig): AggregationAxis[] {
+  if (!config.col) return [];
+  const axes = [config.col];
+  if (config.col2) axes.push(config.col2);
+  if (config.col3) axes.push(config.col3);
+  return axes;
+}
+
+/** 複数軸のキーを結合 */
+function combineAxisKeys(
+  axes: AggregationAxis[],
+  fields: AppField[],
+  values: Record<string, string>
+): string {
+  const parts = axes.map((axis) => {
+    const field = fields.find((f) => f.id === axis.field_id);
+    return keyForAxis(axis, field, values[axis.field_id]);
+  });
+  return parts.join(" / ");
+}
+
 /** 集計値のラベル（表示用） */
 export function measureLabel(config: AggregationConfig, fields: AppField[]): string {
   const m = config.measure;
@@ -78,15 +108,9 @@ export function computeAggregation(
   recordIds: string[],
   valuesByRecord: Record<string, Record<string, string>>
 ): AggregationResult {
-  const rowField = fields.find((f) => f.id === config.row.field_id);
-  const colField = config.col
-    ? fields.find((f) => f.id === config.col!.field_id)
-    : undefined;
-  const col2Field = config.col2
-    ? fields.find((f) => f.id === config.col2!.field_id)
-    : undefined;
-
-  const isCross = config.type === "cross" && !!config.col;
+  const rowAxes = getRowAxes(config);
+  const colAxes = getColAxes(config);
+  const isCross = config.type === "cross" && colAxes.length > 0;
   const singleColKey = measureLabel(config, fields);
 
   // sum/avg 用のアキュムレータ
@@ -98,19 +122,10 @@ export function computeAggregation(
   for (const rid of recordIds) {
     const values = valuesByRecord[rid] ?? {};
 
-    const rowKey = keyForAxis(config.row, rowField, values[config.row.field_id]);
+    const rowKey = combineAxisKeys(rowAxes, fields, values);
     rowKeySet.add(rowKey);
 
-    let colKey = singleColKey;
-    if (isCross && config.col) {
-      const k1 = keyForAxis(config.col, colField, values[config.col.field_id]);
-      if (config.col2) {
-        const k2 = keyForAxis(config.col2, col2Field, values[config.col2.field_id]);
-        colKey = `${k1} / ${k2}`;
-      } else {
-        colKey = k1;
-      }
-    }
+    const colKey = isCross ? combineAxisKeys(colAxes, fields, values) : singleColKey;
     colKeySet.add(colKey);
 
     // メジャー加算値

@@ -234,19 +234,19 @@ export default function AppBuilderPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/tenant/apps" className="text-gray-400 hover:text-gray-600">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/tenant/apps" className="text-gray-400 hover:text-gray-600 shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <h1 className="text-xl font-bold">{app.name} — フォーム設計</h1>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold break-words">{app.name} — フォーム設計</h1>
             <p className="text-sm text-gray-500 mt-1">
               ドラッグで並び替え、右端をドラッグで幅調整（10%刻み）
             </p>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto shrink-0">
           <Save className="w-4 h-4 mr-1" />
           {saving ? "保存中..." : saved ? "保存しました!" : "保存"}
         </Button>

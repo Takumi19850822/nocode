@@ -62,8 +62,8 @@ export function DashboardShell({ profile, apps, children }: DashboardShellProps)
           </Link>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:p-6">{children}</div>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="p-4 sm:p-6 max-w-full">{children}</div>
         </main>
       </div>
     </div>

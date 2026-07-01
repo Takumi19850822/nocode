@@ -8,6 +8,7 @@ import { Input, Select } from "@/components/ui/Input";
 import type {
   AppAggregation,
   AppField,
+  AggregationAxis,
   AggregationConfig,
   AggregationDisplay,
   DateUnit,
@@ -25,9 +26,75 @@ const DISPLAY_LABELS: Record<AggregationDisplay, string> = {
   line: "折れ線グラフ",
 };
 
+type AxisSlot = {
+  fieldId: string;
+  dateUnit: DateUnit;
+};
+
+const EMPTY_AXIS: AxisSlot = { fieldId: "", dateUnit: "month" };
+
 function isDateFieldId(fields: AppField[], id: string) {
   const f = fields.find((x) => x.id === id);
   return f?.field_type === "date" || f?.field_type === "datetime";
+}
+
+function axisFromConfig(axis: AggregationAxis | undefined): AxisSlot {
+  if (!axis) return { ...EMPTY_AXIS };
+  return { fieldId: axis.field_id, dateUnit: axis.date_unit ?? "month" };
+}
+
+function buildAxis(
+  slot: AxisSlot,
+  fields: AppField[]
+): AggregationAxis | undefined {
+  if (!slot.fieldId) return undefined;
+  return {
+    field_id: slot.fieldId,
+    ...(isDateFieldId(fields, slot.fieldId) ? { date_unit: slot.dateUnit } : {}),
+  };
+}
+
+function AxisKeyFields({
+  label,
+  optional,
+  slot,
+  onChange,
+  fieldOptions,
+  fields,
+}: {
+  label: string;
+  optional?: boolean;
+  slot: AxisSlot;
+  onChange: (slot: AxisSlot) => void;
+  fieldOptions: { label: string; value: string }[];
+  fields: AppField[];
+}) {
+  const showDateUnit = isDateFieldId(fields, slot.fieldId);
+
+  return (
+    <div className="space-y-1">
+      <Select
+        label={label}
+        value={slot.fieldId}
+        onChange={(e) => onChange({ ...slot, fieldId: e.target.value })}
+        options={[
+          { label: optional ? "なし" : "選択してください", value: "" },
+          ...fieldOptions,
+        ]}
+      />
+      {showDateUnit && (
+        <Select
+          label="日付の単位"
+          value={slot.dateUnit}
+          onChange={(e) => onChange({ ...slot, dateUnit: e.target.value as DateUnit })}
+          options={[
+            { label: "月単位", value: "month" },
+            { label: "日単位", value: "day" },
+          ]}
+        />
+      )}
+    </div>
+  );
 }
 
 export function AggregationSettings({ appId, fields }: AggregationSettingsProps) {
@@ -37,15 +104,14 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  // フォーム状態
   const [name, setName] = useState("");
   const [type, setType] = useState<"simple" | "cross">("simple");
-  const [rowFieldId, setRowFieldId] = useState("");
-  const [rowDateUnit, setRowDateUnit] = useState<DateUnit>("month");
-  const [colFieldId, setColFieldId] = useState("");
-  const [colDateUnit, setColDateUnit] = useState<DateUnit>("month");
-  const [col2FieldId, setCol2FieldId] = useState("");
-  const [col2DateUnit, setCol2DateUnit] = useState<DateUnit>("month");
+  const [row1, setRow1] = useState<AxisSlot>({ fieldId: "", dateUnit: "month" });
+  const [row2, setRow2] = useState<AxisSlot>({ ...EMPTY_AXIS });
+  const [row3, setRow3] = useState<AxisSlot>({ ...EMPTY_AXIS });
+  const [col1, setCol1] = useState<AxisSlot>({ ...EMPTY_AXIS });
+  const [col2, setCol2] = useState<AxisSlot>({ ...EMPTY_AXIS });
+  const [col3, setCol3] = useState<AxisSlot>({ ...EMPTY_AXIS });
   const [measureKind, setMeasureKind] = useState<"count" | "sum" | "avg">("count");
   const [measureFieldId, setMeasureFieldId] = useState("");
   const [display, setDisplay] = useState<AggregationDisplay>("table");
@@ -74,12 +140,12 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
   function resetForm() {
     setName("");
     setType("simple");
-    setRowFieldId(fields[0]?.id ?? "");
-    setRowDateUnit("month");
-    setColFieldId("");
-    setColDateUnit("month");
-    setCol2FieldId("");
-    setCol2DateUnit("month");
+    setRow1({ fieldId: fields[0]?.id ?? "", dateUnit: "month" });
+    setRow2({ ...EMPTY_AXIS });
+    setRow3({ ...EMPTY_AXIS });
+    setCol1({ ...EMPTY_AXIS });
+    setCol2({ ...EMPTY_AXIS });
+    setCol3({ ...EMPTY_AXIS });
     setMeasureKind("count");
     setMeasureFieldId(measureFieldOptions[0]?.value ?? "");
     setDisplay("table");
@@ -97,12 +163,12 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
     setEditingId(agg.id);
     setName(agg.name);
     setType(c.type);
-    setRowFieldId(c.row.field_id);
-    setRowDateUnit(c.row.date_unit ?? "month");
-    setColFieldId(c.col?.field_id ?? "");
-    setColDateUnit(c.col?.date_unit ?? "month");
-    setCol2FieldId(c.col2?.field_id ?? "");
-    setCol2DateUnit(c.col2?.date_unit ?? "month");
+    setRow1(axisFromConfig(c.row));
+    setRow2(axisFromConfig(c.row2));
+    setRow3(axisFromConfig(c.row3));
+    setCol1(axisFromConfig(c.col));
+    setCol2(axisFromConfig(c.col2));
+    setCol3(axisFromConfig(c.col3));
     setMeasureKind(c.measure.kind);
     setMeasureFieldId(c.measure.kind === "count" ? "" : c.measure.field_id);
     setDisplay(c.display);
@@ -111,25 +177,23 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
   }
 
   function buildConfig(): AggregationConfig | null {
-    if (!rowFieldId) {
-      setError("集計キー（縦軸）を選択してください");
+    const rowAxis = buildAxis(row1, fields);
+    if (!rowAxis) {
+      setError("集計キー（縦軸 第一キー）を選択してください");
       return null;
     }
     if (measureKind !== "count" && !measureFieldId) {
       setError("合計/平均の対象となる数値フィールドを選択してください");
       return null;
     }
-    if (type === "cross" && !colFieldId) {
+    if (type === "cross" && !col1.fieldId) {
       setError("クロス集計では横軸（第一キー）を選択してください");
       return null;
     }
 
     const config: AggregationConfig = {
       type,
-      row: {
-        field_id: rowFieldId,
-        ...(isDateFieldId(fields, rowFieldId) ? { date_unit: rowDateUnit } : {}),
-      },
+      row: rowAxis,
       measure:
         measureKind === "count"
           ? { kind: "count" }
@@ -137,17 +201,17 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
       display,
     };
 
-    if (type === "cross" && colFieldId) {
-      config.col = {
-        field_id: colFieldId,
-        ...(isDateFieldId(fields, colFieldId) ? { date_unit: colDateUnit } : {}),
-      };
-      if (col2FieldId) {
-        config.col2 = {
-          field_id: col2FieldId,
-          ...(isDateFieldId(fields, col2FieldId) ? { date_unit: col2DateUnit } : {}),
-        };
-      }
+    const row2Axis = buildAxis(row2, fields);
+    const row3Axis = buildAxis(row3, fields);
+    if (row2Axis) config.row2 = row2Axis;
+    if (row3Axis) config.row3 = row3Axis;
+
+    if (type === "cross" && col1.fieldId) {
+      config.col = buildAxis(col1, fields)!;
+      const col2Axis = buildAxis(col2, fields);
+      const col3Axis = buildAxis(col3, fields);
+      if (col2Axis) config.col2 = col2Axis;
+      if (col3Axis) config.col3 = col3Axis;
     }
 
     return config;
@@ -195,10 +259,6 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
     await supabase.from("app_aggregations").delete().eq("id", id);
     load();
   }
-
-  const showRowDateUnit = isDateFieldId(fields, rowFieldId);
-  const showColDateUnit = isDateFieldId(fields, colFieldId);
-  const showCol2DateUnit = isDateFieldId(fields, col2FieldId);
 
   return (
     <div className="space-y-3">
@@ -280,67 +340,62 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
             ]}
           />
 
-          <div className="space-y-1">
-            <Select
-              label={type === "cross" ? "縦軸（集計キー）" : "集計キー"}
-              value={rowFieldId}
-              onChange={(e) => setRowFieldId(e.target.value)}
-              options={[{ label: "選択してください", value: "" }, ...fieldOptions]}
+          <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-600">
+              {type === "cross" ? "縦軸（集計キー）" : "集計キー"}
+            </p>
+            <AxisKeyFields
+              label="第一キー"
+              slot={row1}
+              onChange={setRow1}
+              fieldOptions={fieldOptions}
+              fields={fields}
             />
-            {showRowDateUnit && (
-              <Select
-                label="日付の単位"
-                value={rowDateUnit}
-                onChange={(e) => setRowDateUnit(e.target.value as DateUnit)}
-                options={[
-                  { label: "月単位", value: "month" },
-                  { label: "日単位", value: "day" },
-                ]}
-              />
-            )}
+            <AxisKeyFields
+              label="第二キー（任意）"
+              optional
+              slot={row2}
+              onChange={setRow2}
+              fieldOptions={fieldOptions}
+              fields={fields}
+            />
+            <AxisKeyFields
+              label="第三キー（任意）"
+              optional
+              slot={row3}
+              onChange={setRow3}
+              fieldOptions={fieldOptions}
+              fields={fields}
+            />
           </div>
 
           {type === "cross" && (
-            <>
-              <div className="space-y-1">
-                <Select
-                  label="横軸 第一キー"
-                  value={colFieldId}
-                  onChange={(e) => setColFieldId(e.target.value)}
-                  options={[{ label: "選択してください", value: "" }, ...fieldOptions]}
-                />
-                {showColDateUnit && (
-                  <Select
-                    label="日付の単位"
-                    value={colDateUnit}
-                    onChange={(e) => setColDateUnit(e.target.value as DateUnit)}
-                    options={[
-                      { label: "月単位", value: "month" },
-                      { label: "日単位", value: "day" },
-                    ]}
-                  />
-                )}
-              </div>
-              <div className="space-y-1">
-                <Select
-                  label="横軸 第二キー（任意）"
-                  value={col2FieldId}
-                  onChange={(e) => setCol2FieldId(e.target.value)}
-                  options={[{ label: "なし", value: "" }, ...fieldOptions]}
-                />
-                {showCol2DateUnit && (
-                  <Select
-                    label="日付の単位"
-                    value={col2DateUnit}
-                    onChange={(e) => setCol2DateUnit(e.target.value as DateUnit)}
-                    options={[
-                      { label: "月単位", value: "month" },
-                      { label: "日単位", value: "day" },
-                    ]}
-                  />
-                )}
-              </div>
-            </>
+            <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+              <p className="text-xs font-medium text-gray-600">横軸（集計キー）</p>
+              <AxisKeyFields
+                label="第一キー"
+                slot={col1}
+                onChange={setCol1}
+                fieldOptions={fieldOptions}
+                fields={fields}
+              />
+              <AxisKeyFields
+                label="第二キー（任意）"
+                optional
+                slot={col2}
+                onChange={setCol2}
+                fieldOptions={fieldOptions}
+                fields={fields}
+              />
+              <AxisKeyFields
+                label="第三キー（任意）"
+                optional
+                slot={col3}
+                onChange={setCol3}
+                fieldOptions={fieldOptions}
+                fields={fields}
+              />
+            </div>
           )}
 
           <div className="space-y-1">

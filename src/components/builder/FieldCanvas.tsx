@@ -66,10 +66,10 @@ export function FieldCanvas({
       <SortableContext items={fields.map((f) => f.id)} strategy={rectSortingStrategy}>
         <div
           ref={containerRef}
-          className="grid grid-cols-10 gap-3 min-h-[200px] p-4 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 auto-rows-min"
+          className="grid grid-cols-1 lg:grid-cols-10 gap-3 min-h-[200px] p-4 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 auto-rows-min"
         >
           {fields.length === 0 && (
-            <p className="col-span-10 text-center text-gray-400 py-8">
+            <p className="lg:col-span-10 text-center text-gray-400 py-8">
               左のパレットからフィールドを追加してください
             </p>
           )}
@@ -163,7 +163,7 @@ function SortableField({
       ref={mergeRef}
       style={style}
       className={cn(
-        "relative bg-white border rounded-lg p-3 cursor-pointer transition-shadow min-w-0",
+        "field-layout-item relative bg-white border rounded-lg p-3 cursor-pointer transition-shadow min-w-0",
         selected ? "border-blue-500 shadow-md ring-2 ring-blue-200" : "border-gray-200 hover:border-gray-300",
         isDragging && "opacity-50 shadow-lg z-20",
         resizing && "ring-2 ring-blue-300 select-none"

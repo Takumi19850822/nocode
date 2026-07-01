@@ -195,12 +195,18 @@ export type AggregationDisplay = "table" | "bar" | "line";
 export interface AggregationConfig {
   /** 単純集計 or クロス集計 */
   type: "simple" | "cross";
-  /** 縦軸（第一の集計キー） */
+  /** 縦軸 第一キー */
   row: AggregationAxis;
+  /** 縦軸 第二キー（任意） */
+  row2?: AggregationAxis;
+  /** 縦軸 第三キー（任意） */
+  row3?: AggregationAxis;
   /** 横軸 第一キー（クロス集計時） */
   col?: AggregationAxis;
   /** 横軸 第二キー（クロス集計時・任意） */
   col2?: AggregationAxis;
+  /** 横軸 第三キー（クロス集計時・任意） */
+  col3?: AggregationAxis;
   /** 集計値 */
   measure: AggregationMeasure;
   /** 表示形式 */
@@ -233,7 +239,7 @@ export function widthToGridSpan(width: number): number {
 
 /**
  * フィールドの grid-column を計算。break_before の場合は列1から開始して
- * 新しい行に折り返す。スマホ（grid-cols-1）では span がクランプされ縦1列になる。
+ * 新しい行に折り返す。1024px未満（スマホ/タブレット縦）は1フィールド1行。
  */
 export function fieldGridColumn(width: number, breakBefore: boolean): string {
   const span = widthToGridSpan(width);

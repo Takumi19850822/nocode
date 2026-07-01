@@ -76,8 +76,7 @@ export default function AdminUsersPage() {
         <p className="text-xs text-gray-500 mb-4">
           super_admin はアプリから付与できません（SQL でのみ設定）。
         </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <table className="stack-table w-full text-sm">
             <thead>
               <tr className="border-b text-left text-gray-500">
                 <th className="pb-3 font-medium">名前</th>
@@ -88,21 +87,19 @@ export default function AdminUsersPage() {
             <tbody>
               {platformAdmins.map((user) => (
                 <tr key={user.id} className="border-b last:border-0">
-                  <td className="py-3 font-medium">{user.display_name}</td>
-                  <td className="py-3 text-gray-500">{user.email}</td>
-                  <td className="py-3">
+                  <td className="py-3 font-medium" data-label="名前">{user.display_name}</td>
+                  <td className="py-3 text-gray-500 break-all" data-label="メール">{user.email}</td>
+                  <td className="py-3" data-label="ロール">
                     <Badge variant="warning">{roleLabel(user.role)}</Badge>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
       </Card>
 
       <Card title="ユーザーと所属テナント">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <table className="stack-table w-full text-sm">
             <thead>
               <tr className="border-b text-left text-gray-500">
                 <th className="pb-3 font-medium">名前</th>
@@ -115,11 +112,11 @@ export default function AdminUsersPage() {
                 const ms = membershipsOf(user.id);
                 return (
                   <tr key={user.id} className="border-b last:border-0 align-top">
-                    <td className="py-3 font-medium">
+                    <td className="py-3 font-medium" data-label="名前">
                       {user.display_name?.trim() || "（未設定）"}
                     </td>
-                    <td className="py-3 text-gray-500">{user.email}</td>
-                    <td className="py-3">
+                    <td className="py-3 text-gray-500 break-all" data-label="メール">{user.email}</td>
+                    <td className="py-3" data-label="所属テナント / ロール">
                       {ms.length === 0 ? (
                         <span className="text-gray-400">未所属</span>
                       ) : (
@@ -162,7 +159,6 @@ export default function AdminUsersPage() {
             total={tenantUsers.length}
             onPageChange={setPage}
           />
-        </div>
       </Card>
     </div>
   );
