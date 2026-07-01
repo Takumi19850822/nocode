@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Label,
   Legend,
   Line,
   LineChart,
@@ -14,13 +15,21 @@ import {
   YAxis,
 } from "recharts";
 import { createClient } from "@/lib/supabase/client";
+import { Select } from "@/components/ui/Input";
 import {
+  chartXAxisLabel,
   computeAggregation,
+  isDateRowAxis,
   measureLabel,
   resultToChartData,
   type AggregationResult,
 } from "@/lib/aggregations/compute";
-import type { AppAggregation, AppField } from "@/types";
+import type {
+  AggregationConfig,
+  AggregationMeasure,
+  AppAggregation,
+  AppField,
+} from "@/types";
 
 interface AggregationViewProps {
   aggregation: AppAggregation;
@@ -44,7 +53,25 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
     Record<string, Record<string, string>>
   >({});
   const [loading, setLoading] = useState(true);
+  const [measureKind, setMeasureKind] = useState<"count" | "sum" | "avg">("count");
+  const [measureFieldId, setMeasureFieldId] = useState("");
   const supabase = createClient();
+
+  const measureFieldOptions = useMemo(
+    () =>
+      fields
+        .filter((f) => f.field_type === "number" || f.field_type === "calculation")
+        .map((f) => ({ label: f.label || "(無名)", value: f.id })),
+    [fields]
+  );
+
+  useEffect(() => {
+    const m = aggregation.config.measure;
+    setMeasureKind(m.kind);
+    setMeasureFieldId(
+      m.kind === "count" ? (measureFieldOptions[0]?.value ?? "") : m.field_id
+    );
+  }, [aggregation.id, aggregation.config.measure, measureFieldOptions]);
 
   useEffect(() => {
     if (recordIds.length === 0) {
@@ -78,13 +105,32 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aggregation.id, recordIds]);
 
+  const effectiveMeasure: AggregationMeasure = useMemo(() => {
+    if (measureKind === "count") return { kind: "count" };
+    return { kind: measureKind, field_id: measureFieldId };
+  }, [measureKind, measureFieldId]);
+
+  const effectiveConfig: AggregationConfig = useMemo(
+    () => ({ ...aggregation.config, measure: effectiveMeasure }),
+    [aggregation.config, effectiveMeasure]
+  );
+
+  const measureInvalid =
+    measureKind !== "count" && !measureFieldId && measureFieldOptions.length > 0;
+
   const result: AggregationResult = useMemo(
-    () => computeAggregation(aggregation.config, fields, recordIds, valuesByRecord),
-    [aggregation.config, fields, recordIds, valuesByRecord]
+    () =>
+      measureInvalid
+        ? { rowKeys: [], colKeys: [], matrix: {} }
+        : computeAggregation(effectiveConfig, fields, recordIds, valuesByRecord),
+    [effectiveConfig, fields, recordIds, valuesByRecord, measureInvalid]
   );
 
   const chartData = useMemo(() => resultToChartData(result), [result]);
-  const measure = measureLabel(aggregation.config, fields);
+  const measure = measureLabel(effectiveConfig, fields);
+  const xAxisLabel = chartXAxisLabel(effectiveConfig, fields);
+  const isTimeSeries =
+    effectiveConfig.type === "simple" && isDateRowAxis(effectiveConfig, fields);
 
   if (loading) {
     return <p className="text-sm text-gray-400 py-6 text-center">集計中...</p>;
@@ -95,27 +141,83 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
   }
 
   const { display } = aggregation.config;
+  const chartHeight = isTimeSeries ? 360 : 340;
+  const chartBottomMargin = isTimeSeries ? 56 : 48;
 
   return (
     <div className="space-y-4 min-w-0">
-      <p className="text-xs text-gray-500">集計値: {measure}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Select
+          label="集計値"
+          value={measureKind}
+          onChange={(e) => setMeasureKind(e.target.value as "count" | "sum" | "avg")}
+          options={[
+            { label: "件数", value: "count" },
+            { label: "合計", value: "sum" },
+            { label: "平均", value: "avg" },
+          ]}
+        />
+        {measureKind !== "count" && (
+          <Select
+            label="対象の数値フィールド"
+            value={measureFieldId}
+            onChange={(e) => setMeasureFieldId(e.target.value)}
+            options={[
+              { label: "選択してください", value: "" },
+              ...measureFieldOptions,
+            ]}
+          />
+        )}
+      </div>
 
-      {display === "table" && <AggregationTable result={result} />}
+      {measureKind !== "count" && measureFieldOptions.length === 0 && (
+        <p className="text-sm text-amber-600">
+          合計/平均に使える数値フィールドがありません。
+        </p>
+      )}
+      {measureInvalid && (
+        <p className="text-sm text-amber-600">数値フィールドを選択してください。</p>
+      )}
 
-      {display === "bar" && (
-        <div className="w-full min-w-0 overflow-hidden" style={{ height: 340 }}>
+      {isTimeSeries && display !== "table" && (
+        <p className="text-xs text-gray-500">
+          日付を横軸（下）に、{measure}を縦軸に表示しています（単純集計）。
+        </p>
+      )}
+      {effectiveConfig.type === "cross" && display !== "table" && (
+        <p className="text-xs text-gray-500">
+          クロス集計：横軸（下）は縦軸キー、系列は横軸キーごとに表示されます。
+        </p>
+      )}
+
+      {!measureInvalid && display === "table" && <AggregationTable result={result} measure={measure} />}
+
+      {!measureInvalid && display === "bar" && (
+        <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+            <BarChart
+              data={chartData}
+              margin={{ top: 8, right: 8, bottom: chartBottomMargin, left: 0 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
               <XAxis
                 dataKey="name"
                 tick={{ fontSize: 11 }}
                 interval={0}
-                angle={-25}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis tick={{ fontSize: 11 }} width={40} />
+                angle={isTimeSeries ? 0 : -25}
+                textAnchor={isTimeSeries ? "middle" : "end"}
+                height={isTimeSeries ? 48 : 60}
+              >
+                <Label value={xAxisLabel} offset={-4} position="insideBottom" fontSize={11} />
+              </XAxis>
+              <YAxis tick={{ fontSize: 11 }} width={48}>
+                <Label
+                  value={measure}
+                  angle={-90}
+                  position="insideLeft"
+                  style={{ textAnchor: "middle", fontSize: 11 }}
+                />
+              </YAxis>
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {result.colKeys.map((ck, i) => (
@@ -126,20 +228,32 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
         </div>
       )}
 
-      {display === "line" && (
-        <div className="w-full min-w-0 overflow-hidden" style={{ height: 340 }}>
+      {!measureInvalid && display === "line" && (
+        <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 8, right: 8, bottom: chartBottomMargin, left: 0 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
               <XAxis
                 dataKey="name"
                 tick={{ fontSize: 11 }}
                 interval={0}
-                angle={-25}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis tick={{ fontSize: 11 }} width={40} />
+                angle={isTimeSeries ? 0 : -25}
+                textAnchor={isTimeSeries ? "middle" : "end"}
+                height={isTimeSeries ? 48 : 60}
+              >
+                <Label value={xAxisLabel} offset={-4} position="insideBottom" fontSize={11} />
+              </XAxis>
+              <YAxis tick={{ fontSize: 11 }} width={48}>
+                <Label
+                  value={measure}
+                  angle={-90}
+                  position="insideLeft"
+                  style={{ textAnchor: "middle", fontSize: 11 }}
+                />
+              </YAxis>
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {result.colKeys.map((ck, i) => (
@@ -157,14 +271,22 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
         </div>
       )}
 
-      {display !== "table" && <AggregationTable result={result} />}
+      {!measureInvalid && display !== "table" && (
+        <AggregationTable result={result} measure={measure} />
+      )}
     </div>
   );
 }
 
-function AggregationTable({ result }: { result: AggregationResult }) {
+function AggregationTable({
+  result,
+  measure,
+}: {
+  result: AggregationResult;
+  measure: string;
+}) {
   const { rowKeys, colKeys, matrix } = result;
-  const showColHeader = colKeys.length > 1 || colKeys[0] !== "件数";
+  const showColHeader = colKeys.length > 1 || colKeys[0] !== measure;
 
   const colTotals: Record<string, number> = {};
   colKeys.forEach((ck) => {
@@ -174,42 +296,45 @@ function AggregationTable({ result }: { result: AggregationResult }) {
   const fmt = (n: number) =>
     Number.isInteger(n) ? n.toLocaleString() : (Math.round(n * 100) / 100).toLocaleString();
 
+  if (rowKeys.length === 0) return null;
+
   return (
     <div className="min-w-0">
-      <table className="stack-table w-full text-sm border-collapse">
+      <table className="agg-table w-full text-sm border-collapse">
         <thead>
           <tr className="border-b text-left text-gray-500">
-            <th className="py-2 pr-4 font-medium"></th>
+            <th className="py-2 pr-2 sm:pr-4 font-medium align-bottom"></th>
             {showColHeader ? (
               colKeys.map((ck) => (
-                <th key={ck} className="py-2 px-3 font-medium text-right break-words">
+                <th
+                  key={ck}
+                  className="py-2 px-1 sm:px-3 font-medium text-right align-bottom"
+                >
                   {ck}
                 </th>
               ))
             ) : (
-              <th className="py-2 px-3 font-medium text-right">{colKeys[0]}</th>
+              <th className="py-2 px-1 sm:px-3 font-medium text-right align-bottom">
+                {colKeys[0]}
+              </th>
             )}
           </tr>
         </thead>
         <tbody>
           {rowKeys.map((rk) => (
             <tr key={rk} className="border-b last:border-0">
-              <td className="py-2 pr-4 font-medium break-words" data-label="項目">
-                {rk}
-              </td>
+              <td className="py-2 pr-2 sm:pr-4 font-medium">{rk}</td>
               {colKeys.map((ck) => (
-                <td key={ck} className="py-2 px-3 text-right tabular-nums break-words" data-label={ck}>
+                <td key={ck} className="py-2 px-1 sm:px-3 text-right tabular-nums">
                   {fmt(matrix[rk]?.[ck] ?? 0)}
                 </td>
               ))}
             </tr>
           ))}
           <tr className="border-t-2 border-gray-300 font-medium">
-            <td className="py-2 pr-4" data-label="項目">
-              合計
-            </td>
+            <td className="py-2 pr-2 sm:pr-4">合計</td>
             {colKeys.map((ck) => (
-              <td key={ck} className="py-2 px-3 text-right tabular-nums break-words" data-label={ck}>
+              <td key={ck} className="py-2 px-1 sm:px-3 text-right tabular-nums">
                 {fmt(colTotals[ck])}
               </td>
             ))}

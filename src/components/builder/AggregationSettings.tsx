@@ -339,6 +339,11 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
               { label: "クロス集計", value: "cross" },
             ]}
           />
+          <p className="text-xs text-gray-500 -mt-2">
+            {type === "simple"
+              ? "月別・日別の推移グラフは単純集計＋縦軸に日付フィールドを指定してください。"
+              : "日付×別カテゴリ（例：月×商品）の比較表・グラフ向けです。"}
+          </p>
 
           <div className="space-y-3 rounded-lg border border-gray-200 p-3">
             <p className="text-xs font-medium text-gray-600">

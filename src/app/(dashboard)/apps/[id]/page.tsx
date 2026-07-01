@@ -358,29 +358,31 @@ export default function AppRuntimePage() {
           <p className="text-gray-400 text-center py-8">レコードがありません</p>
         ) : (
           <div>
-            <table className="stack-table w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-gray-500">
-                  {listFields.map((f) => (
-                    <th key={f.id} className="pb-2 font-medium">{f.label}</th>
+            <div className="scroll-table-wrap">
+              <table className="scroll-table text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    {listFields.map((f) => (
+                      <th key={f.id} className="font-medium">{f.label}</th>
+                    ))}
+                    <th className="font-medium">作成日</th>
+                    <th className="font-medium">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedRecords.map((record) => (
+                    <RecordRow
+                      key={record.id}
+                      appId={appId}
+                      record={record}
+                      fields={listFields}
+                      values={valuesByRecord[record.id] ?? {}}
+                      onDelete={() => setDeleteRecordId(record.id)}
+                    />
                   ))}
-                  <th className="pb-2 font-medium">作成日</th>
-                  <th className="pb-2 font-medium w-24">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedRecords.map((record) => (
-                  <RecordRow
-                    key={record.id}
-                    appId={appId}
-                    record={record}
-                    fields={listFields}
-                    values={valuesByRecord[record.id] ?? {}}
-                    onDelete={() => setDeleteRecordId(record.id)}
-                  />
-                ))}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
             <Pagination
               page={page}
               pageSize={PAGE_SIZE}
@@ -416,23 +418,23 @@ function RecordRow({
   onDelete: () => void;
 }) {
   return (
-    <tr className="border-b last:border-0 hover:bg-gray-50">
+    <tr>
       {fields.map((f) => (
-        <td key={f.id} className="py-2" data-label={f.label}>
+        <td key={f.id}>
           <Link
             href={`/apps/${appId}/records/${record.id}`}
-            className="text-blue-600 hover:underline break-words"
+            className="text-blue-600 hover:underline"
           >
             {formatFieldDisplayValue(f, values[f.id])}
           </Link>
         </td>
       ))}
-      <td className="py-2 text-gray-500" data-label="作成日">
+      <td className="text-gray-500">
         <Link href={`/apps/${appId}/records/${record.id}`} className="hover:underline">
           {new Date(record.created_at).toLocaleDateString("ja-JP")}
         </Link>
       </td>
-      <td className="py-2" data-label="操作">
+      <td>
         <div className="flex items-center gap-1">
           <Link
             href={`/apps/${appId}/records/${record.id}`}

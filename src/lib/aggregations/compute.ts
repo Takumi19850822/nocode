@@ -97,6 +97,24 @@ export function measureLabel(config: AggregationConfig, fields: AppField[]): str
   return m.kind === "sum" ? `${name} 合計` : `${name} 平均`;
 }
 
+/** 縦軸の第一キーが日付/日時フィールドか */
+export function isDateRowAxis(config: AggregationConfig, fields: AppField[]): boolean {
+  const rowField = fields.find((f) => f.id === config.row.field_id);
+  return isDateField(rowField);
+}
+
+/** グラフ横軸（X軸）のラベル */
+export function chartXAxisLabel(config: AggregationConfig, fields: AppField[]): string {
+  if (isDateRowAxis(config, fields)) {
+    const unit = config.row.date_unit === "day" ? "日" : "月";
+    const rowField = fields.find((f) => f.id === config.row.field_id);
+    const name = rowField?.label ?? "日付";
+    return `${name}（${unit}別）`;
+  }
+  const rowField = fields.find((f) => f.id === config.row.field_id);
+  return rowField?.label ?? "項目";
+}
+
 /**
  * 集計を計算する。
  * @param recordIds 対象レコードID（全件）

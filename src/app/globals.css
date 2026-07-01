@@ -77,3 +77,70 @@ body {
     content: none;
   }
 }
+
+/* 領域内横スクロール付きテーブル（レコード一覧など） */
+.scroll-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+.scroll-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.scroll-table th,
+.scroll-table td {
+  padding: 0.5rem 0.75rem;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.scroll-table thead tr {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.scroll-table tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.scroll-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.scroll-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+/* 集計表: スマホでもクロス集計の表形式を維持（セル内折り返しで横スクロール不要） */
+.agg-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.agg-table th,
+.agg-table td {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1023px) {
+  .agg-table {
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  .agg-table th,
+  .agg-table td {
+    padding: 0.375rem 0.25rem;
+    vertical-align: top;
+  }
+
+  .agg-table th:first-child,
+  .agg-table td:first-child {
+    width: 30%;
+  }
+}
