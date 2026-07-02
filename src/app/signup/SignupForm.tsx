@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/passwordPolicy";
 
 export function SignupForm() {
   const router = useRouter();
@@ -92,7 +93,7 @@ export function SignupForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={MIN_PASSWORD_LENGTH}
             autoComplete="new-password"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}

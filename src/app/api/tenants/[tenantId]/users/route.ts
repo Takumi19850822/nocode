@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { canAssignRole, canManageTenantAdmins, requireTenantManager } from "@/lib/auth/permissions";
 import { createAdminClient, hasAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/passwordPolicy";
 import type { UserRole } from "@/types";
 type RouteContext = { params: Promise<{ tenantId: string }> };
 
@@ -105,8 +106,11 @@ export async function POST(req: Request, context: RouteContext) {
         { status: 503 }
       );
     }
-    if (password.length < 8) {
-      return NextResponse.json({ error: "パスワードは8文字以上必要です" }, { status: 400 });
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return NextResponse.json(
+        { error: `パスワードは${MIN_PASSWORD_LENGTH}文字以上必要です` },
+        { status: 400 }
+      );
     }
 
     const { data: createdUser, error: createErr } = await admin.auth.admin.createUser({

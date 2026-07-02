@@ -241,6 +241,60 @@ export interface AppAggregation {
   updated_at: string;
 }
 
+// ===== レコード一覧ビュー =====
+
+export type ViewType = "table" | "calendar" | "kanban";
+
+export type CalendarMode = "day" | "week" | "month";
+
+export interface TableViewConfig {
+  type: "table";
+  /** 表示するフィールドID（順番） */
+  field_ids: string[];
+}
+
+export interface CalendarViewConfig {
+  type: "calendar";
+  /** 日付/日時フィールド */
+  date_field_id: string;
+  /** 初期表示モード */
+  default_mode: CalendarMode;
+  /** イベントのタイトルに使うフィールド（任意） */
+  title_field_id?: string;
+  /** イベント内に表示する追加フィールド（任意） */
+  field_ids?: string[];
+}
+
+export interface KanbanViewConfig {
+  type: "kanban";
+  /** 列の基準となるプルダウン/ラジオフィールド */
+  status_field_id: string;
+  /** カードのメインラベル */
+  title_field_id: string;
+  /** カードに表示する値フィールド */
+  card_field_ids: string[];
+  /** 列の並び順（option value）。未指定時はフィールド定義の順 */
+  option_order?: string[];
+}
+
+export type ViewConfig = TableViewConfig | CalendarViewConfig | KanbanViewConfig;
+
+export interface AppView {
+  id: string;
+  app_id: string;
+  name: string;
+  config: ViewConfig;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const VIEW_TYPE_LABELS: Record<ViewType, string> = {
+  table: "一覧（表）",
+  calendar: "カレンダー",
+  kanban: "カンバン",
+};
+
 export const GRID_COLUMNS = 10;
 export const FIELD_WIDTH_STEP = 10;
 export const FIELD_WIDTH_MIN = 10;

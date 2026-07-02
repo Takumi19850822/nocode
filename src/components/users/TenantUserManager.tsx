@@ -12,6 +12,7 @@ import {
   PageSection,
 } from "@/components/layout/PageLayout";
 import type { UserRole } from "@/types";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth/passwordPolicy";
 import { Pencil, Shield, User, UserMinus } from "lucide-react";
 
 const PAGE_SIZE = 20;
@@ -293,8 +294,8 @@ export function TenantUserManager({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={8}
-              placeholder="8文字以上"
+              minLength={MIN_PASSWORD_LENGTH}
+              placeholder={`${MIN_PASSWORD_LENGTH}文字以上`}
             />
           )}
           {error && <p className="text-sm text-red-600">{error}</p>}

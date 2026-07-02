@@ -6,7 +6,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Input";
-import { Pagination } from "@/components/ui/Pagination";
 import {
   PageBody,
   PageFrame,
@@ -16,8 +15,7 @@ import {
 import { RecordFormFields } from "@/components/records/RecordFormFields";
 import { RecordDeleteModal } from "@/components/records/RecordDeleteModal";
 import { AggregationView } from "@/components/records/AggregationView";
-import { formatFieldDisplayValue } from "@/lib/records/formatFieldValue";
-import { getListDisplayFields } from "@/lib/records/getListDisplayFields";
+import { AppViewRenderer } from "@/components/records/AppViewRenderer";
 import { getProfileDisplayName } from "@/lib/auth/profileDisplayName";
 import { todayDateString } from "@/lib/utils";
 import type {
@@ -25,10 +23,12 @@ import type {
   AppAggregation,
   AppField,
   AppRecord,
+  AppView,
   SearchFieldConfig,
   DateFieldConfig,
 } from "@/types";
-import { Plus, Trash2, Eye, FileSpreadsheet } from "lucide-react";
+import { VIEW_TYPE_LABELS } from "@/types";
+import { Plus, FileSpreadsheet } from "lucide-react";
 
 export default function AppRuntimePage() {
   const params = useParams();
@@ -41,7 +41,9 @@ export default function AppRuntimePage() {
     Record<string, Record<string, string>>
   >({});
   const [aggregations, setAggregations] = useState<AppAggregation[]>([]);
+  const [views, setViews] = useState<AppView[]>([]);
   const [selectedAggId, setSelectedAggId] = useState("");
+  const [selectedViewId, setSelectedViewId] = useState("");
   const [page, setPage] = useState(1);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
@@ -55,13 +57,25 @@ export default function AppRuntimePage() {
   const supabase = createClient();
   const PAGE_SIZE = 20;
 
+  const selectedView = views.find((v) => v.id === selectedViewId) ?? null;
+  const isTableView =
+    !selectedView || selectedView.config.type === "table";
+
   useEffect(() => {
     loadApp();
     loadCurrentUser();
   }, [appId]);
 
-  // 表示中ページのレコード値をまとめて1クエリで取得（N+1回避）
   useEffect(() => {
+    setPage(1);
+  }, [selectedViewId]);
+
+  // テーブルビュー時のみ、表示ページ分の値を取得
+  useEffect(() => {
+    if (!isTableView) {
+      setValuesByRecord({});
+      return;
+    }
     const pageRecordIds = records
       .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
       .map((r) => r.id);
@@ -86,7 +100,7 @@ export default function AppRuntimePage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, page]);
+  }, [records, page, isTableView, selectedViewId]);
 
   async function loadCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -104,15 +118,17 @@ export default function AppRuntimePage() {
     if (!appData) return;
     setApp(appData);
 
-    const [fieldsRes, recordsRes, aggRes] = await Promise.all([
+    const [fieldsRes, recordsRes, aggRes, viewsRes] = await Promise.all([
       supabase.from("app_fields").select("*").eq("app_id", appId).order("sort_order"),
       supabase.from("app_records").select("*").eq("app_id", appId).order("created_at", { ascending: false }),
       supabase.from("app_aggregations").select("*").eq("app_id", appId).order("sort_order"),
+      supabase.from("app_views").select("*").eq("app_id", appId).order("sort_order"),
     ]);
 
     setFields(fieldsRes.data ?? []);
     setRecords(recordsRes.data ?? []);
     setAggregations((aggRes.data as AppAggregation[] | null) ?? []);
+    setViews((viewsRes.data as AppView[] | null) ?? []);
     setPage(1);
   }
 
@@ -276,10 +292,22 @@ export default function AppRuntimePage() {
 
   if (!app) return <p className="text-gray-500">読み込み中...</p>;
 
-  const listFields = getListDisplayFields(fields, app.list_field_ids);
-  const pagedRecords = records.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const selectedAgg = aggregations.find((a) => a.id === selectedAggId) ?? null;
   const allRecordIds = records.map((r) => r.id);
+
+  const viewOptions = [
+    ...(views.length > 0
+      ? [{ label: "標準一覧（一覧表示設定）", value: "" }]
+      : []),
+    ...views.map((v) => ({
+      label: `${v.name}（${VIEW_TYPE_LABELS[v.config.type]}）`,
+      value: v.id,
+    })),
+  ];
+
+  const sectionTitle = selectedView
+    ? `${selectedView.name} (${records.length}件)`
+    : `レコード一覧 (${records.length}件)`;
 
   return (
     <PageFrame>
@@ -369,46 +397,33 @@ export default function AppRuntimePage() {
         )}
 
         <PageSection
-          title={`レコード一覧 (${records.length}件)`}
+          title={sectionTitle}
           bordered={showForm || aggregations.length > 0}
-        >
-          {records.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">レコードがありません</p>
-          ) : (
-            <div>
-              <div className="scroll-table-wrap">
-                <table className="scroll-table text-sm">
-                  <thead>
-                    <tr>
-                      {listFields.map((f) => (
-                        <th key={f.id}>{f.label}</th>
-                      ))}
-                      <th>作成日</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedRecords.map((record) => (
-                      <RecordRow
-                        key={record.id}
-                        appId={appId}
-                        record={record}
-                        fields={listFields}
-                        values={valuesByRecord[record.id] ?? {}}
-                        onDelete={() => setDeleteRecordId(record.id)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
+          action={
+            views.length > 0 ? (
+              <div className="w-full sm:w-56">
+                <Select
+                  value={selectedViewId}
+                  onChange={(e) => setSelectedViewId(e.target.value)}
+                  options={viewOptions}
+                />
               </div>
-              <Pagination
-                page={page}
-                pageSize={PAGE_SIZE}
-                total={records.length}
-                onPageChange={setPage}
-              />
-            </div>
-          )}
+            ) : undefined
+          }
+        >
+          <AppViewRenderer
+            appId={appId}
+            app={app}
+            fields={fields}
+            records={records}
+            view={selectedView}
+            valuesByRecord={valuesByRecord}
+            page={page}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+            onDelete={setDeleteRecordId}
+            onRecordUpdated={loadApp}
+          />
         </PageSection>
       </PageBody>
 
@@ -420,57 +435,5 @@ export default function AppRuntimePage() {
         onDeleted={loadApp}
       />
     </PageFrame>
-  );
-}
-
-function RecordRow({
-  appId,
-  record,
-  fields,
-  values,
-  onDelete,
-}: {
-  appId: string;
-  record: AppRecord;
-  fields: AppField[];
-  values: Record<string, string>;
-  onDelete: () => void;
-}) {
-  const detailHref = `/apps/${appId}/records/${record.id}`;
-
-  return (
-    <tr>
-      {fields.map((f) => (
-        <td key={f.id}>
-          <Link href={detailHref}>
-            {formatFieldDisplayValue(f, values[f.id])}
-          </Link>
-        </td>
-      ))}
-      <td className="text-gray-500">
-        <Link href={detailHref}>
-          {new Date(record.created_at).toLocaleDateString("ja-JP")}
-        </Link>
-      </td>
-      <td>
-        <div className="flex items-center gap-0.5">
-          <Link
-            href={detailHref}
-            className="inline-flex items-center justify-center w-7 h-7 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            title="詳細"
-          >
-            <Eye className="w-4 h-4" />
-          </Link>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex items-center justify-center w-7 h-7 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-            title="削除"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </td>
-    </tr>
   );
 }

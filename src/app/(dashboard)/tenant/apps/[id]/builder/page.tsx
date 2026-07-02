@@ -14,6 +14,7 @@ import {
 import { FieldCanvas } from "@/components/builder/FieldCanvas";
 import { ListFieldSettings } from "@/components/builder/ListFieldSettings";
 import { AggregationSettings } from "@/components/builder/AggregationSettings";
+import { ViewSettings } from "@/components/builder/ViewSettings";
 import {
   FieldSettingsPanel,
   createDraftField,
@@ -305,6 +306,10 @@ export default function AppBuilderPage() {
                 listFieldIds={listFieldIds}
                 onChange={setListFieldIds}
               />
+            </PageSection>
+
+            <PageSection title="ビュー（一覧 / カレンダー / カンバン）" bordered>
+              <ViewSettings appId={appId} fields={fields} listFieldIds={listFieldIds} />
             </PageSection>
 
             <PageSection title="集計 / グラフ" bordered>

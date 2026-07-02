@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
 import {
@@ -12,7 +13,7 @@ import {
   PageSection,
 } from "@/components/layout/PageLayout";
 import type { Profile, Tenant, UserRole } from "@/types";
-import { Users } from "lucide-react";
+import { Shield, ShieldOff, Users } from "lucide-react";
 
 const PAGE_SIZE = 20;
 
@@ -29,6 +30,8 @@ export default function AdminUsersPage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [actionError, setActionError] = useState("");
+  const [actionUserId, setActionUserId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -47,6 +50,38 @@ export default function AdminUsersPage() {
     setTenants(tenantsRes.data ?? []);
     setMembers((membersRes.data as MemberRow[] | null) ?? []);
     setLoading(false);
+  }
+
+  async function handleSuperAdminAction(userId: string, action: "grant" | "revoke") {
+    const target = users.find((u) => u.id === userId);
+    const label = action === "grant" ? "スーパー管理者に昇格" : "スーパー管理者を解除";
+    const message =
+      action === "grant"
+        ? `「${target?.email}」をスーパー管理者にしますか？`
+        : `「${target?.email}」のスーパー管理者権限を解除しますか？`;
+
+    if (!confirm(message)) return;
+
+    setActionError("");
+    setActionUserId(userId);
+
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/super-admin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(data.error ?? `${label}に失敗しました`);
+        return;
+      }
+      await loadData();
+    } catch {
+      setActionError(`${label}に失敗しました`);
+    } finally {
+      setActionUserId(null);
+    }
   }
 
   const tenantName = (id: string) => tenants.find((t) => t.id === id)?.name ?? "-";
@@ -81,9 +116,16 @@ export default function AdminUsersPage() {
       />
 
       <PageBody>
+        {actionError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            {actionError}
+          </p>
+        )}
+
         <PageSection title="プラットフォーム管理者（super_admin）">
           <p className="text-xs text-gray-500 mb-4">
-            super_admin はアプリから付与できません（SQL でのみ設定）。
+            スーパー管理者は全テナント・全アプリを管理できます。下の一覧からユーザーを昇格するか、
+            既存のスーパー管理者の権限を解除できます。
           </p>
           <table className="stack-table w-full text-sm">
             <thead>
@@ -91,6 +133,7 @@ export default function AdminUsersPage() {
                 <th>名前</th>
                 <th>メール</th>
                 <th>ロール</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -100,6 +143,22 @@ export default function AdminUsersPage() {
                   <td className="py-3 text-gray-500 break-all" data-label="メール">{user.email}</td>
                   <td className="py-3" data-label="ロール">
                     <Badge variant="warning">{roleLabel(user.role)}</Badge>
+                  </td>
+                  <td className="py-3" data-label="操作">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={actionUserId === user.id || platformAdmins.length <= 1}
+                      onClick={() => handleSuperAdminAction(user.id, "revoke")}
+                      title={
+                        platformAdmins.length <= 1
+                          ? "最後のスーパー管理者は解除できません"
+                          : undefined
+                      }
+                    >
+                      <ShieldOff className="w-4 h-4 mr-1" />
+                      {actionUserId === user.id ? "処理中..." : "解除"}
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -114,6 +173,7 @@ export default function AdminUsersPage() {
                 <th>名前</th>
                 <th>メール</th>
                 <th>所属テナント / ロール</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -150,12 +210,23 @@ export default function AdminUsersPage() {
                         </div>
                       )}
                     </td>
+                    <td className="py-3" data-label="操作">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={actionUserId === user.id}
+                        onClick={() => handleSuperAdminAction(user.id, "grant")}
+                      >
+                        <Shield className="w-4 h-4 mr-1" />
+                        {actionUserId === user.id ? "処理中..." : "昇格"}
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
               {tenantUsers.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-gray-400">
+                  <td colSpan={4} className="py-8 text-center text-gray-400">
                     ユーザーがいません
                   </td>
                 </tr>

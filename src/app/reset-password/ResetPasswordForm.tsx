@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { MIN_PASSWORD_LENGTH, validatePasswordLength } from "@/lib/auth/passwordPolicy";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -28,8 +29,9 @@ export function ResetPasswordForm() {
       setError("認証コードは6桁の数字です");
       return;
     }
-    if (password.length < 8) {
-      setError("パスワードは8文字以上で入力してください");
+    const passwordError = validatePasswordLength(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (password !== confirm) {
@@ -104,9 +106,9 @@ export function ResetPasswordForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
               autoComplete="new-password"
-              placeholder="8文字以上"
+              placeholder={`${MIN_PASSWORD_LENGTH}文字以上`}
             />
             <Input
               label="新しいパスワード（確認）"
@@ -114,7 +116,7 @@ export function ResetPasswordForm() {
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
               autoComplete="new-password"
             />
             {error && <p className="text-sm text-red-600">{error}</p>}

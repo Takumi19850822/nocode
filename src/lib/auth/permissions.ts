@@ -25,8 +25,9 @@ export async function requireTenantManager(tenantId: string): Promise<
 }
 
 /**
- * super_admin はアプリから付与不可。super_admin は tenant_admin/user を任命可能。
- * テナント管理者は自テナントの一般ユーザーのみ管理可能。
+ * テナント内ロールの任命可否。
+ * super_admin は tenant_admin/user を任命可能（テナント所属 API 経由）。
+ * super_admin への昇格は /api/admin/users/[userId]/super-admin を使用。
  */
 export function canAssignRole(
   actor: SessionProfile,

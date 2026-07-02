@@ -53,13 +53,25 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 ### 3. 初期管理者の作成
 
-Supabase Auth でユーザーを作成後、SQL Editor で:
+Supabase Auth でユーザーを作成後、次のいずれかで super_admin を付与します。
+
+**方法A: 管理画面（推奨）**
+
+1. 最初の super_admin でログイン
+2. **Admin → ユーザー管理** を開く
+3. 対象ユーザーの「昇格」をクリック
+
+※ `SUPABASE_SECRET_KEY`（service role）の設定が必要です。
+
+**方法B: Supabase SQL Editor**
 
 ```sql
 UPDATE profiles
-SET role = 'super_admin'
+SET role = 'super_admin', tenant_id = NULL
 WHERE email = 'admin@example.com';
 ```
+
+※ `013_super_admin_grant.sql` 適用後に有効です。
 
 ### 4. 開発サーバー起動
 
