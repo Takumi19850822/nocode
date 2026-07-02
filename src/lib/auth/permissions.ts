@@ -1,12 +1,22 @@
 import { getCurrentProfile } from "@/lib/supabase/server";
 import type { SessionProfile, UserRole } from "@/types";
 
+export async function requireAuthenticated(): Promise<
+  { profile: SessionProfile } | { error: string; status: number }
+> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Unauthorized", status: 401 };
+  return { profile };
+}
+
 export async function requireSuperAdmin(): Promise<
   { profile: SessionProfile } | { error: string; status: number }
 > {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "Unauthorized", status: 401 };
-  if (profile.role !== "super_admin") return { error: "Forbidden", status: 403 };
+  if (profile.globalRole !== "super_admin") {
+    return { error: "Forbidden", status: 403 };
+  }
   return { profile };
 }
 
@@ -15,7 +25,7 @@ export async function requireTenantManager(tenantId: string): Promise<
 > {
   const profile = await getCurrentProfile();
   if (!profile) return { error: "Unauthorized", status: 401 };
-  if (profile.role === "super_admin") return { profile };
+  if (profile.globalRole === "super_admin") return { profile };
 
   const membership = profile.memberships.find((m) => m.tenant_id === tenantId);
   if (membership && membership.role === "tenant_admin") {
@@ -36,7 +46,7 @@ export function canAssignRole(
 ): boolean {
   if (role === "super_admin") return false;
 
-  if (actor.role === "super_admin") {
+  if (actor.globalRole === "super_admin") {
     return role === "tenant_admin" || role === "user";
   }
 
@@ -49,5 +59,5 @@ export function canAssignRole(
 }
 
 export function canManageTenantAdmins(actor: SessionProfile): boolean {
-  return actor.role === "super_admin";
+  return actor.globalRole === "super_admin";
 }

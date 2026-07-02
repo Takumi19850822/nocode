@@ -46,9 +46,12 @@ export interface TenantMembership {
 /**
  * ログイン中ユーザーの実効セッション情報。
  * role / tenant_id は「現在作業中(active)テナント」での実効値（super_admin は据え置き）。
+ * globalRole は DB profiles.role（権限判定用）。
  */
 export interface SessionProfile extends Profile {
   memberships: TenantMembership[];
+  /** DB 上のグローバルロール（super_admin 判定に使用） */
+  globalRole: UserRole;
 }
 
 export interface App {

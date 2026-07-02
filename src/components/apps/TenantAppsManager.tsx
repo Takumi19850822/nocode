@@ -13,7 +13,9 @@ import {
   PageSection,
 } from "@/components/layout/PageLayout";
 import type { App } from "@/types";
-import { Plus, Pencil, Settings, LayoutGrid } from "lucide-react";
+import { AppIconPicker, DEFAULT_APP_ICON } from "@/components/apps/AppIconPicker";
+import { getAppIcon, sanitizeAppIcon, type AppIconKey } from "@/lib/apps/appIcons";
+import { Plus, Pencil, Settings } from "lucide-react";
 
 interface TenantAppsManagerProps {
   tenantId: string;
@@ -32,6 +34,7 @@ export function TenantAppsManager({
   const [editing, setEditing] = useState<App | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [icon, setIcon] = useState<AppIconKey>(DEFAULT_APP_ICON);
   const [error, setError] = useState("");
 
   const loadApps = useCallback(async () => {
@@ -59,6 +62,7 @@ export function TenantAppsManager({
     setEditing(null);
     setName("");
     setDescription("");
+    setIcon(DEFAULT_APP_ICON);
     setModalOpen(true);
   }
 
@@ -66,17 +70,19 @@ export function TenantAppsManager({
     setEditing(app);
     setName(app.name);
     setDescription(app.description);
+    setIcon(sanitizeAppIcon(app.icon));
     setModalOpen(true);
   }
 
   async function handleSave() {
     if (!name.trim()) return;
     const supabase = createClient();
+    const iconValue = sanitizeAppIcon(icon);
 
     if (editing) {
       const { error: updateError } = await supabase
         .from("apps")
-        .update({ name, description })
+        .update({ name, description, icon: iconValue })
         .eq("id", editing.id);
       if (updateError) {
         setError(updateError.message);
@@ -86,6 +92,7 @@ export function TenantAppsManager({
       const { error: insertError } = await supabase.from("apps").insert({
         name,
         description,
+        icon: iconValue,
         tenant_id: tenantId,
         sort_order: apps.length,
       });
@@ -126,12 +133,14 @@ export function TenantAppsManager({
             </p>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {apps.map((app) => (
+              {apps.map((app) => {
+                const AppIcon = getAppIcon(app.icon);
+                return (
                 <li key={app.id} className="py-4 first:pt-0">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
-                        <LayoutGrid className="w-5 h-5 text-blue-600" />
+                        <AppIcon className="w-5 h-5 text-blue-600" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -165,7 +174,8 @@ export function TenantAppsManager({
                     </div>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </PageSection>
@@ -196,6 +206,7 @@ export function TenantAppsManager({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+          <AppIconPicker value={icon} onChange={setIcon} />
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       </Modal>

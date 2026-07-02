@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/supabase/server";
 import { parseExportListRow } from "@/lib/exports/parseExportRow";
 
 /** テナント内の Excel 出力一覧（アプリ名付き） */
 export async function GET() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const profile = await getCurrentProfile();
+  if (!profile) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
+  if (profile.globalRole !== "super_admin" && !profile.active_tenant_id) {
+    return NextResponse.json(
+      { error: "作業中テナントが設定されていません" },
+      { status: 403 }
+    );
+  }
+
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("app_record_exports")
     .select("*, apps(name)")

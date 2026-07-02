@@ -28,6 +28,7 @@ import type {
   DateFieldConfig,
 } from "@/types";
 import { VIEW_TYPE_LABELS } from "@/types";
+import { preserveDashboardScroll } from "@/lib/dom/preserveScroll";
 import { Plus, FileSpreadsheet } from "lucide-react";
 
 export default function AppRuntimePage() {
@@ -67,7 +68,7 @@ export default function AppRuntimePage() {
   }, [appId]);
 
   useEffect(() => {
-    setPage(1);
+    preserveDashboardScroll(() => setPage(1));
   }, [selectedViewId]);
 
   // テーブルビュー時のみ、表示ページ分の値を取得
@@ -372,7 +373,9 @@ export default function AppRuntimePage() {
               <div className="w-full sm:w-48">
                 <Select
                   value={selectedAggId}
-                  onChange={(e) => setSelectedAggId(e.target.value)}
+                  onChange={(e) =>
+                    preserveDashboardScroll(() => setSelectedAggId(e.target.value))
+                  }
                   options={[
                     { label: "選択してください", value: "" },
                     ...aggregations.map((a) => ({ label: a.name, value: a.id })),
@@ -382,6 +385,7 @@ export default function AppRuntimePage() {
             }
             bordered={showForm}
           >
+          <div className="min-h-[280px]">
             {selectedAgg ? (
               <AggregationView
                 aggregation={selectedAgg}
@@ -393,7 +397,8 @@ export default function AppRuntimePage() {
                 上のプルダウンからグラフを選択してください
               </p>
             )}
-          </PageSection>
+          </div>
+        </PageSection>
         )}
 
         <PageSection
@@ -404,14 +409,17 @@ export default function AppRuntimePage() {
               <div className="w-full sm:w-56">
                 <Select
                   value={selectedViewId}
-                  onChange={(e) => setSelectedViewId(e.target.value)}
+                  onChange={(e) =>
+                    preserveDashboardScroll(() => setSelectedViewId(e.target.value))
+                  }
                   options={viewOptions}
                 />
               </div>
             ) : undefined
           }
         >
-          <AppViewRenderer
+          <div className="min-h-[320px]">
+            <AppViewRenderer
             appId={appId}
             app={app}
             fields={fields}
@@ -424,6 +432,7 @@ export default function AppRuntimePage() {
             onDelete={setDeleteRecordId}
             onRecordUpdated={loadApp}
           />
+          </div>
         </PageSection>
       </PageBody>
 

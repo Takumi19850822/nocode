@@ -39,7 +39,8 @@ export async function getCurrentProfile(): Promise<SessionProfile | null> {
 
   if (!profileRow) return null;
   const profile = profileRow as Profile;
-  const isSuperAdmin = profile.role === "super_admin";
+  const globalRole = profile.role;
+  const isSuperAdmin = globalRole === "super_admin";
 
   // 所属テナント（有効なもの）を取得
   const { data: memberRows } = await supabase
@@ -96,5 +97,6 @@ export async function getCurrentProfile(): Promise<SessionProfile | null> {
     tenant_id: effectiveTenantId,
     active_tenant_id: activeTenantId,
     memberships,
+    globalRole,
   };
 }

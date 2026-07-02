@@ -11,8 +11,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const tenantId = String(body.tenantId ?? "");
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "不正なリクエストです" }, { status: 400 });
+  }
+
+  const tenantId = String((body as { tenantId?: unknown })?.tenantId ?? "");
   if (!tenantId) {
     return NextResponse.json({ error: "tenantId は必須です" }, { status: 400 });
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient, hasAdminClient } from "@/lib/supabase/admin";
-import { EXPORT_STORAGE_BUCKET } from "@/lib/exports/generateXlsx";
+import { EXPORT_STORAGE_BUCKET, exportStoragePath } from "@/lib/exports/generateXlsx";
 import { verifyAppAccess } from "@/lib/exports/verifyAppAccess";
 
 type RouteContext = { params: Promise<{ appId: string; exportId: string }> };
@@ -37,6 +37,11 @@ export async function GET(_req: Request, context: RouteContext) {
       { error: "ファイルの準備ができていません" },
       { status: 409 }
     );
+  }
+
+  const expectedPath = exportStoragePath(auth.app.tenant_id, appId, exportId);
+  if (exportRow.storage_path !== expectedPath) {
+    return NextResponse.json({ error: "不正なファイルパスです" }, { status: 403 });
   }
 
   const admin = createAdminClient();

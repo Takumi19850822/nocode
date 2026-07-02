@@ -180,7 +180,11 @@ export function KanbanView({
   const activeRecord = activeId ? records.find((r) => r.id === activeId) : null;
 
   if (loading) {
-    return <p className="text-sm text-gray-400 text-center py-12">読み込み中...</p>;
+    return (
+      <p className="text-sm text-gray-400 text-center py-12 min-h-[280px] flex items-center justify-center">
+        読み込み中...
+      </p>
+    );
   }
 
   return (

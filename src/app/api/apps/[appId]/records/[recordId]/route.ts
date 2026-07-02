@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { assertFieldIdsBelongToApp } from "@/lib/records/validateAppFieldIds";
 import type { RecordReference } from "@/types";
 type RouteContext = {
   params: Promise<{ appId: string; recordId: string }>;
@@ -111,6 +112,15 @@ export async function PATCH(req: Request, context: RouteContext) {
 
   if (!values?.length) {
     return NextResponse.json({ error: "更新データがありません" }, { status: 400 });
+  }
+
+  const fieldCheck = await assertFieldIdsBelongToApp(
+    supabase,
+    appId,
+    values.map((v) => v.field_id)
+  );
+  if (!fieldCheck.ok) {
+    return NextResponse.json({ error: fieldCheck.error }, { status: 400 });
   }
 
   const rows = values.map((v) => ({

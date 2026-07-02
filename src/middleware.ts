@@ -14,6 +14,31 @@ function isSignupExplicitlyAllowed() {
   return process.env.NEXT_PUBLIC_ALLOW_SIGNUP === "true";
 }
 
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * CSRF対策: Cookieセッションに依存するAPIへの状態変更リクエストは
+ * Origin（無ければReferer）がこのオリジン自身であることを要求する。
+ * SameSite=Lax/Strict の防御に加えた多層防御。
+ */
+function isSameOriginRequest(request: NextRequest): boolean {
+  const expectedOrigin = request.nextUrl.origin;
+  const origin = request.headers.get("origin");
+  if (origin) return origin === expectedOrigin;
+
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      return new URL(referer).origin === expectedOrigin;
+    } catch {
+      return false;
+    }
+  }
+
+  // Origin/Referer どちらも無いリクエストは拒否（正規のブラウザ発行では通常付与される）
+  return false;
+}
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
@@ -47,7 +72,13 @@ export async function middleware(request: NextRequest) {
   const isSignupPage = pathname === "/signup";
   const isPasswordReset =
     pathname === "/forgot-password" || pathname === "/reset-password";
+  const isApiRoute = pathname.startsWith("/api/");
   const isPublic = isLoginPage || isSignupPage || isPasswordReset;
+
+  // CSRF対策: API への状態変更リクエストは同一オリジンのみ許可
+  if (isApiRoute && UNSAFE_METHODS.has(request.method) && !isSameOriginRequest(request)) {
+    return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+  }
 
   // サインアップページ: 初回のみ or 明示的許可
   if (isSignupPage) {
@@ -68,7 +99,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (!user && !isPublic) {
+  if (!user && !isPublic && !isApiRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

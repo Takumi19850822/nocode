@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { getProfileDisplayName } from "@/lib/auth/profileDisplayName";
+import { getAppIcon } from "@/lib/apps/appIcons";
 import { cn } from "@/lib/utils";
 import type { SessionProfile, TenantMembership } from "@/types";
 import { createClient } from "@/lib/supabase/client";
@@ -169,12 +170,14 @@ export function Sidebar({ profile, apps, forceExpanded = false, onNavigate }: Si
 
         {apps.length > 0 && (
           <NavSection label="アプリ" collapsed={collapsed}>
-            {apps.map((app) => (
+            {apps.map((app) => {
+              const AppIcon = getAppIcon(app.icon);
+              return (
               <li key={app.id}>
                 <NavItem
                   href={`/apps/${app.id}`}
                   label={app.name}
-                  icon={LayoutGrid}
+                  icon={AppIcon}
                   active={
                     pathname === `/apps/${app.id}` ||
                     pathname.startsWith(`/apps/${app.id}/records/`) ||
@@ -184,7 +187,8 @@ export function Sidebar({ profile, apps, forceExpanded = false, onNavigate }: Si
                   onNavigate={onNavigate}
                 />
               </li>
-            ))}
+              );
+            })}
           </NavSection>
         )}
 

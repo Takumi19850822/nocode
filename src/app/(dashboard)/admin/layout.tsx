@@ -7,7 +7,7 @@ export default async function AdminLayout({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "super_admin") redirect("/");
+  if (profile.globalRole !== "super_admin") redirect("/");
 
   return <>{children}</>;
 }

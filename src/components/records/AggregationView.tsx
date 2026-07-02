@@ -81,6 +81,14 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
       setLoading(false);
       return;
     }
+
+    // レコードIDが同じなら再取得しない（グラフ切替時のちらつき・スクロール跳ね防止）
+    const loadedCount = recordIds.filter((id) => valuesByRecord[id] !== undefined).length;
+    if (loadedCount === recordIds.length) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     (async () => {
@@ -105,7 +113,7 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aggregation.id, recordIds]);
+  }, [recordIds.join(",")]);
 
   const effectiveMeasure: AggregationMeasure = useMemo(() => {
     if (measureKind === "count") return { kind: "count" };
@@ -136,7 +144,11 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
   const rowPivot = usesRowSeriesPivot(effectiveConfig);
 
   if (loading) {
-    return <p className="text-sm text-gray-400 py-6 text-center">集計中...</p>;
+    return (
+      <p className="text-sm text-gray-400 py-6 text-center min-h-[200px] flex items-center justify-center">
+        集計中...
+      </p>
+    );
   }
 
   if (recordIds.length === 0) {
