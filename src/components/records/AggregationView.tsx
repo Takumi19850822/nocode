@@ -16,22 +16,33 @@ import {
 } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { Select } from "@/components/ui/Input";
+import { FilterBar, filterHasConditions } from "@/components/filters/FilterBar";
+import { matchesFilter } from "@/lib/filters/evaluate";
 import {
   chartSeriesAxisLabel,
   chartXAxisLabel,
   computeAggregation,
+  computeHeaderPlan,
+  computePivotTable,
+  getColAxes,
+  getRowAxes,
   isDateRowAxis,
   measureLabel,
+  pivotAxisFieldLabels,
+  pivotCell,
   resultToChartData,
   usesRowSeriesPivot,
   type AggregationResult,
+  type PivotResult,
 } from "@/lib/aggregations/compute";
 import type {
   AggregationConfig,
   AggregationMeasure,
   AppAggregation,
   AppField,
+  FilterConfig,
 } from "@/types";
+import { EMPTY_FILTER } from "@/types";
 
 interface AggregationViewProps {
   aggregation: AppAggregation;
@@ -57,6 +68,7 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
   const [loading, setLoading] = useState(true);
   const [measureKind, setMeasureKind] = useState<"count" | "sum" | "avg">("count");
   const [measureFieldId, setMeasureFieldId] = useState("");
+  const [filter, setFilter] = useState<FilterConfig>(aggregation.config.filter ?? EMPTY_FILTER);
   const supabase = createClient();
 
   const measureFieldOptions = useMemo(
@@ -73,7 +85,9 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
     setMeasureFieldId(
       m.kind === "count" ? (measureFieldOptions[0]?.value ?? "") : m.field_id
     );
-  }, [aggregation.id, aggregation.config.measure, measureFieldOptions]);
+    setFilter(aggregation.config.filter ?? EMPTY_FILTER);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aggregation.id]);
 
   useEffect(() => {
     if (recordIds.length === 0) {
@@ -115,6 +129,11 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordIds.join(",")]);
 
+  const filteredRecordIds = useMemo(() => {
+    if (!filterHasConditions(filter)) return recordIds;
+    return recordIds.filter((rid) => matchesFilter(filter, fields, valuesByRecord[rid] ?? {}));
+  }, [recordIds, filter, fields, valuesByRecord]);
+
   const effectiveMeasure: AggregationMeasure = useMemo(() => {
     if (measureKind === "count") return { kind: "count" };
     return { kind: measureKind, field_id: measureFieldId };
@@ -132,8 +151,16 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
     () =>
       measureInvalid
         ? { rowKeys: [], colKeys: [], matrix: {} }
-        : computeAggregation(effectiveConfig, fields, recordIds, valuesByRecord),
-    [effectiveConfig, fields, recordIds, valuesByRecord, measureInvalid]
+        : computeAggregation(effectiveConfig, fields, filteredRecordIds, valuesByRecord),
+    [effectiveConfig, fields, filteredRecordIds, valuesByRecord, measureInvalid]
+  );
+
+  const pivot: PivotResult = useMemo(
+    () =>
+      measureInvalid
+        ? { rowTuples: [], colTuples: [], matrix: {} }
+        : computePivotTable(effectiveConfig, fields, filteredRecordIds, valuesByRecord),
+    [effectiveConfig, fields, filteredRecordIds, valuesByRecord, measureInvalid]
   );
 
   const chartData = useMemo(() => resultToChartData(result), [result]);
@@ -168,6 +195,8 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
 
   return (
     <div className="space-y-4 min-w-0">
+      <FilterBar fields={fields} value={filter} onChange={setFilter} />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Select
           label="集計値"
@@ -201,183 +230,224 @@ export function AggregationView({ aggregation, fields, recordIds }: AggregationV
         <p className="text-sm text-amber-600">数値フィールドを選択してください。</p>
       )}
 
-      {rowPivot && display !== "table" && (
-        <p className="text-xs text-gray-500">
-          縦軸第一キー（{seriesAxisLabel}）で色分け、第二キー以降（{xAxisLabel}）を横軸（下）に表示しています。
+      {filteredRecordIds.length === 0 && !measureInvalid ? (
+        <p className="text-sm text-gray-400 text-center py-6">
+          絞り込み条件に一致するデータがありません
         </p>
-      )}
-      {!rowPivot && isTimeSeries && display !== "table" && (
-        <p className="text-xs text-gray-500">
-          {xAxisLabel}を横軸（下）に、{measure}を縦軸に表示しています。
-        </p>
-      )}
-      {!rowPivot && effectiveConfig.type === "cross" && display !== "table" && (
-        <p className="text-xs text-gray-500">
-          クロス集計：横軸（下）は縦軸キー、系列（色）は横軸キーごとに表示されます。
-        </p>
-      )}
+      ) : (
+        <>
+          {rowPivot && display !== "table" && (
+            <p className="text-xs text-gray-500">
+              縦軸第一キー（{seriesAxisLabel}）で色分け、第二キー以降（{xAxisLabel}）を横軸（下）に表示しています。
+            </p>
+          )}
+          {!rowPivot && isTimeSeries && display !== "table" && (
+            <p className="text-xs text-gray-500">
+              {xAxisLabel}を横軸（下）に、{measure}を縦軸に表示しています。
+            </p>
+          )}
+          {!rowPivot && effectiveConfig.type === "cross" && display !== "table" && (
+            <p className="text-xs text-gray-500">
+              クロス集計：横軸（下）は縦軸キー、系列（色）は横軸キーごとに表示されます。
+            </p>
+          )}
 
-      {!measureInvalid && display === "table" && <AggregationTable result={result} measure={measure} />}
+          {!measureInvalid && display === "table" && (
+            <PivotTable pivot={pivot} config={effectiveConfig} fields={fields} measure={measure} />
+          )}
 
-      {!measureInvalid && display === "bar" && (
-        <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={chartMargin}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                interval={0}
-                angle={isTimeSeries ? 0 : -25}
-                textAnchor={isTimeSeries ? "middle" : "end"}
-                height={xAxisHeight}
-              >
-                <Label
-                  value={xAxisLabel}
-                  offset={-2}
-                  position="insideBottom"
-                  fontSize={11}
-                />
-              </XAxis>
-              <YAxis tick={{ fontSize: 11 }} width={48}>
-                <Label
-                  value={measure}
-                  angle={-90}
-                  position="insideLeft"
-                  style={{ textAnchor: "middle", fontSize: 11 }}
-                />
-              </YAxis>
-              <Tooltip />
-              <Legend
-                verticalAlign={hasMultiSeries ? "top" : "bottom"}
-                wrapperStyle={{ fontSize: 12, paddingBottom: hasMultiSeries ? 4 : 0 }}
-              />
-              {result.colKeys.map((ck, i) => (
-                <Bar key={ck} dataKey={ck} fill={COLORS[i % COLORS.length]} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+          {!measureInvalid && display === "bar" && (
+            <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={chartMargin}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    angle={isTimeSeries ? 0 : -25}
+                    textAnchor={isTimeSeries ? "middle" : "end"}
+                    height={xAxisHeight}
+                  >
+                    <Label
+                      value={xAxisLabel}
+                      offset={-2}
+                      position="insideBottom"
+                      fontSize={11}
+                    />
+                  </XAxis>
+                  <YAxis tick={{ fontSize: 11 }} width={48}>
+                    <Label
+                      value={measure}
+                      angle={-90}
+                      position="insideLeft"
+                      style={{ textAnchor: "middle", fontSize: 11 }}
+                    />
+                  </YAxis>
+                  <Tooltip />
+                  <Legend
+                    verticalAlign={hasMultiSeries ? "top" : "bottom"}
+                    wrapperStyle={{ fontSize: 12, paddingBottom: hasMultiSeries ? 4 : 0 }}
+                  />
+                  {result.colKeys.map((ck, i) => (
+                    <Bar key={ck} dataKey={ck} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
-      {!measureInvalid && display === "line" && (
-        <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={chartMargin}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                interval={0}
-                angle={isTimeSeries ? 0 : -25}
-                textAnchor={isTimeSeries ? "middle" : "end"}
-                height={xAxisHeight}
-              >
-                <Label
-                  value={xAxisLabel}
-                  offset={-2}
-                  position="insideBottom"
-                  fontSize={11}
-                />
-              </XAxis>
-              <YAxis tick={{ fontSize: 11 }} width={48}>
-                <Label
-                  value={measure}
-                  angle={-90}
-                  position="insideLeft"
-                  style={{ textAnchor: "middle", fontSize: 11 }}
-                />
-              </YAxis>
-              <Tooltip />
-              <Legend
-                verticalAlign={hasMultiSeries ? "top" : "bottom"}
-                wrapperStyle={{ fontSize: 12, paddingBottom: hasMultiSeries ? 4 : 0 }}
-              />
-              {result.colKeys.map((ck, i) => (
-                <Line
-                  key={ck}
-                  type="monotone"
-                  dataKey={ck}
-                  stroke={COLORS[i % COLORS.length]}
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+          {!measureInvalid && display === "line" && (
+            <div className="w-full min-w-0 overflow-hidden" style={{ height: chartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={chartMargin}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    angle={isTimeSeries ? 0 : -25}
+                    textAnchor={isTimeSeries ? "middle" : "end"}
+                    height={xAxisHeight}
+                  >
+                    <Label
+                      value={xAxisLabel}
+                      offset={-2}
+                      position="insideBottom"
+                      fontSize={11}
+                    />
+                  </XAxis>
+                  <YAxis tick={{ fontSize: 11 }} width={48}>
+                    <Label
+                      value={measure}
+                      angle={-90}
+                      position="insideLeft"
+                      style={{ textAnchor: "middle", fontSize: 11 }}
+                    />
+                  </YAxis>
+                  <Tooltip />
+                  <Legend
+                    verticalAlign={hasMultiSeries ? "top" : "bottom"}
+                    wrapperStyle={{ fontSize: 12, paddingBottom: hasMultiSeries ? 4 : 0 }}
+                  />
+                  {result.colKeys.map((ck, i) => (
+                    <Line
+                      key={ck}
+                      type="monotone"
+                      dataKey={ck}
+                      stroke={COLORS[i % COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
-      {!measureInvalid && display !== "table" && (
-        <AggregationTable result={result} measure={measure} />
+          {!measureInvalid && display !== "table" && (
+            <PivotTable pivot={pivot} config={effectiveConfig} fields={fields} measure={measure} />
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function AggregationTable({
-  result,
+/** Excel のピボットテーブルのようにネストした行/列見出し（rowSpan/colSpan）で表示 */
+function PivotTable({
+  pivot,
+  config,
+  fields,
   measure,
 }: {
-  result: AggregationResult;
+  pivot: PivotResult;
+  config: AggregationConfig;
+  fields: AppField[];
   measure: string;
 }) {
-  const { rowKeys, colKeys, matrix } = result;
-  const showColHeader = colKeys.length > 1 || colKeys[0] !== measure;
+  const { rowTuples, colTuples, matrix } = pivot;
+  if (rowTuples.length === 0) return null;
 
-  const colTotals: Record<string, number> = {};
-  colKeys.forEach((ck) => {
-    colTotals[ck] = rowKeys.reduce((s, rk) => s + (matrix[rk]?.[ck] ?? 0), 0);
-  });
+  const rowAxes = getRowAxes(config);
+  const colAxes = getColAxes(config);
+  const isCross = config.type === "cross" && colAxes.length > 0;
+
+  const rowLevels = rowAxes.length;
+  const colLevels = colTuples[0]?.length ?? 1;
+
+  const rowPlan = computeHeaderPlan(rowTuples, rowLevels);
+  const colPlan = computeHeaderPlan(colTuples, colLevels);
+  const rowFieldLabels = pivotAxisFieldLabels(rowAxes, fields);
 
   const fmt = (n: number) =>
     Number.isInteger(n) ? n.toLocaleString() : (Math.round(n * 100) / 100).toLocaleString();
 
-  if (rowKeys.length === 0) return null;
+  const colTotals = colTuples.map((ct) =>
+    rowTuples.reduce((s, rt) => s + pivotCell(pivot, rt, ct), 0)
+  );
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 overflow-x-auto">
       <table className="agg-table w-full text-sm">
         <thead>
-          <tr>
-            <th className="align-bottom"></th>
-            {showColHeader ? (
-              colKeys.map((ck) => (
-                <th
-                  key={ck}
-                  className="text-right align-bottom"
-                >
-                  {ck}
+          {Array.from({ length: colLevels }, (_, level) => (
+            <tr key={level}>
+              {level === 0 && (
+                <th rowSpan={colLevels} colSpan={rowLevels || 1} className="align-bottom bg-gray-50">
+                  {isCross && rowLevels > 0 && (
+                    <div className="flex divide-x divide-gray-200 -m-2">
+                      {rowFieldLabels.map((label, i) => (
+                        <span key={i} className="flex-1 px-2 text-xs font-normal text-gray-400 text-center">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </th>
-              ))
-            ) : (
-              <th className="text-right align-bottom">
-                {colKeys[0]}
-              </th>
-            )}
-          </tr>
+              )}
+              {colPlan[level].map((cell, i) =>
+                cell ? (
+                  <th key={i} colSpan={cell.span} className="text-center align-bottom">
+                    {cell.label}
+                  </th>
+                ) : null
+              )}
+            </tr>
+          ))}
         </thead>
         <tbody>
-          {rowKeys.map((rk) => (
-            <tr key={rk}>
-              <td className="font-medium">{rk}</td>
-              {colKeys.map((ck) => (
-                <td key={ck} className="text-right tabular-nums">
-                  {fmt(matrix[rk]?.[ck] ?? 0)}
+          {rowTuples.map((rt, ri) => (
+            <tr key={ri}>
+              {Array.from({ length: rowLevels }, (_, level) => {
+                const cell = rowPlan[level][ri];
+                if (!cell) return null;
+                return (
+                  <td key={level} rowSpan={cell.span} className="font-medium align-top">
+                    {cell.label}
+                  </td>
+                );
+              })}
+              {colTuples.map((ct, ci) => (
+                <td key={ci} className="text-right tabular-nums">
+                  {fmt(pivotCell(pivot, rt, ct))}
                 </td>
               ))}
             </tr>
           ))}
           <tr>
-            <td className="font-semibold">合計</td>
-            {colKeys.map((ck) => (
-              <td key={ck} className="text-right tabular-nums font-semibold">
-                {fmt(colTotals[ck])}
+            <td colSpan={rowLevels || 1} className="font-semibold">
+              合計
+            </td>
+            {colTuples.map((_, ci) => (
+              <td key={ci} className="text-right tabular-nums font-semibold">
+                {fmt(colTotals[ci])}
               </td>
             ))}
           </tr>
         </tbody>
       </table>
+      {!isCross && <p className="text-xs text-gray-400 mt-1">{measure}</p>}
     </div>
   );
 }

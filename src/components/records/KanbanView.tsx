@@ -27,6 +27,8 @@ interface KanbanViewProps {
   fields: AppField[];
   records: AppRecord[];
   onRecordUpdated?: () => void;
+  /** false の場合ドラッグ操作を無効化（設定画面のプレビュー用） */
+  interactive?: boolean;
 }
 
 export function KanbanView({
@@ -35,6 +37,7 @@ export function KanbanView({
   fields,
   records,
   onRecordUpdated,
+  interactive = true,
 }: KanbanViewProps) {
   const [valuesByRecord, setValuesByRecord] = useState<
     Record<string, Record<string, string>>
@@ -187,6 +190,48 @@ export function KanbanView({
     );
   }
 
+  const columns = (
+    <div className="flex gap-3 overflow-x-auto pb-2 min-h-[420px]">
+      {columnValues.map((colValue) => (
+        <KanbanColumn
+          key={colValue}
+          columnId={`column:${colValue}`}
+          label={columnLabels.get(colValue) ?? colValue}
+          records={recordsByColumn.map.get(colValue) ?? []}
+          appId={appId}
+          titleField={titleField}
+          cardFields={cardFields}
+          valuesByRecord={valuesByRecord}
+          interactive={interactive}
+        />
+      ))}
+      {recordsByColumn.unassigned.length > 0 && (
+        <KanbanColumn
+          columnId="column:"
+          label="未設定"
+          records={recordsByColumn.unassigned}
+          appId={appId}
+          titleField={titleField}
+          cardFields={cardFields}
+          valuesByRecord={valuesByRecord}
+          droppable={false}
+          interactive={interactive}
+        />
+      )}
+    </div>
+  );
+
+  if (!interactive) {
+    return (
+      <div>
+        <p className="text-xs text-gray-400 mb-2">
+          プレビューではドラッグ操作は無効です
+        </p>
+        {columns}
+      </div>
+    );
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -194,32 +239,7 @@ export function KanbanView({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-3 overflow-x-auto pb-2 min-h-[420px]">
-        {columnValues.map((colValue) => (
-          <KanbanColumn
-            key={colValue}
-            columnId={`column:${colValue}`}
-            label={columnLabels.get(colValue) ?? colValue}
-            records={recordsByColumn.map.get(colValue) ?? []}
-            appId={appId}
-            titleField={titleField}
-            cardFields={cardFields}
-            valuesByRecord={valuesByRecord}
-          />
-        ))}
-        {recordsByColumn.unassigned.length > 0 && (
-          <KanbanColumn
-            columnId="column:"
-            label="未設定"
-            records={recordsByColumn.unassigned}
-            appId={appId}
-            titleField={titleField}
-            cardFields={cardFields}
-            valuesByRecord={valuesByRecord}
-            droppable={false}
-          />
-        )}
-      </div>
+      {columns}
 
       <DragOverlay>
         {activeRecord ? (
@@ -246,6 +266,7 @@ function KanbanColumn({
   cardFields,
   valuesByRecord,
   droppable = true,
+  interactive = true,
 }: {
   columnId: string;
   label: string;
@@ -255,10 +276,11 @@ function KanbanColumn({
   cardFields: AppField[];
   valuesByRecord: Record<string, Record<string, string>>;
   droppable?: boolean;
+  interactive?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnId,
-    disabled: !droppable,
+    disabled: !droppable || !interactive,
   });
 
   return (
@@ -275,16 +297,28 @@ function KanbanColumn({
         </div>
       </div>
       <div className="p-2 space-y-2 min-h-[360px]">
-        {records.map((record) => (
-          <DraggableKanbanCard
-            key={record.id}
-            record={record}
-            appId={appId}
-            titleField={titleField}
-            cardFields={cardFields}
-            values={valuesByRecord[record.id] ?? {}}
-          />
-        ))}
+        {records.map((record) =>
+          interactive ? (
+            <DraggableKanbanCard
+              key={record.id}
+              record={record}
+              appId={appId}
+              titleField={titleField}
+              cardFields={cardFields}
+              values={valuesByRecord[record.id] ?? {}}
+            />
+          ) : (
+            <KanbanCard
+              key={record.id}
+              record={record}
+              appId={appId}
+              titleField={titleField}
+              cardFields={cardFields}
+              values={valuesByRecord[record.id] ?? {}}
+              interactive={false}
+            />
+          )
+        )}
       </div>
     </div>
   );
@@ -319,6 +353,7 @@ function KanbanCard({
   cardFields,
   values,
   isDragging,
+  interactive = true,
 }: {
   record: AppRecord;
   appId: string;
@@ -326,13 +361,14 @@ function KanbanCard({
   cardFields: AppField[];
   values: Record<string, string>;
   isDragging?: boolean;
+  interactive?: boolean;
 }) {
   const href = `/apps/${appId}/records/${record.id}`;
   const title = formatFieldDisplayValue(titleField, values[titleField.id]);
 
   return (
     <div
-      className={`rounded-lg border bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing ${
+      className={`rounded-lg border bg-white p-3 shadow-sm ${interactive ? "cursor-grab active:cursor-grabbing" : ""} ${
         isDragging ? "opacity-60 border-blue-300 shadow-md" : "border-gray-200 hover:border-blue-200"
       }`}
     >

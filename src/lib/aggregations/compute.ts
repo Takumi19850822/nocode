@@ -233,6 +233,145 @@ export function computeAggregation(
   return { rowKeys, colKeys, matrix };
 }
 
+// ===================================================================
+// ネスト型ピボット表（クロス集計用）
+// ===================================================================
+
+const KEY_SEP = "\u0000";
+
+export interface PivotResult {
+  /** 行キーのタプル配列（行ごとに rowAxes.length 個のラベル） */
+  rowTuples: string[][];
+  /** 列キーのタプル配列（列ごとに colAxes.length 個のラベル。単純集計時は [[集計値ラベル]] の1列） */
+  colTuples: string[][];
+  /** matrix[tupleKey(row)::tupleKey(col)] = 値 */
+  matrix: Record<string, number>;
+}
+
+function tupleKey(tuple: string[]): string {
+  return tuple.join(KEY_SEP);
+}
+
+function compareTuples(a: string[], b: string[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const av = a[i] ?? "";
+    const bv = b[i] ?? "";
+    if (av === bv) continue;
+    if (av === EMPTY_LABEL) return 1;
+    if (bv === EMPTY_LABEL) return -1;
+    return av.localeCompare(bv, "ja", { numeric: true });
+  }
+  return 0;
+}
+
+/** クロス集計/単純集計を「行×列」のネスト型ピボット表として計算（表示は表のみ想定） */
+export function computePivotTable(
+  config: AggregationConfig,
+  fields: AppField[],
+  recordIds: string[],
+  valuesByRecord: Record<string, Record<string, string>>
+): PivotResult {
+  const rowAxes = getRowAxes(config);
+  const colAxes = getColAxes(config);
+  const isCross = config.type === "cross" && colAxes.length > 0;
+  const singleColLabel = measureLabel(config, fields);
+
+  const sumMap = new Map<string, number>();
+  const cntMap = new Map<string, number>();
+  const rowTupleMap = new Map<string, string[]>();
+  const colTupleMap = new Map<string, string[]>();
+
+  for (const rid of recordIds) {
+    const values = valuesByRecord[rid] ?? {};
+    const rowTuple = rowAxes.map((axis) =>
+      keyForAxis(axis, fieldForAxis(fields, axis), values[axis.field_id])
+    );
+    const colTuple = isCross
+      ? colAxes.map((axis) => keyForAxis(axis, fieldForAxis(fields, axis), values[axis.field_id]))
+      : [singleColLabel];
+
+    const rk = tupleKey(rowTuple);
+    const ck = tupleKey(colTuple);
+    rowTupleMap.set(rk, rowTuple);
+    colTupleMap.set(ck, colTuple);
+
+    let add = 0;
+    if (config.measure.kind === "count") {
+      add = 1;
+    } else {
+      const raw = values[config.measure.field_id] ?? "";
+      const num = Number(stripNumberCommas(raw));
+      add = Number.isFinite(num) ? num : 0;
+    }
+
+    const cellKey = `${rk}::${ck}`;
+    sumMap.set(cellKey, (sumMap.get(cellKey) ?? 0) + add);
+    cntMap.set(cellKey, (cntMap.get(cellKey) ?? 0) + 1);
+  }
+
+  const rowTuples = [...rowTupleMap.values()].sort(compareTuples);
+  const colTuples = isCross
+    ? [...colTupleMap.values()].sort(compareTuples)
+    : [[singleColLabel]];
+
+  const matrix: Record<string, number> = {};
+  for (const rt of rowTuples) {
+    for (const ct of colTuples) {
+      const cellKey = `${tupleKey(rt)}::${tupleKey(ct)}`;
+      const sum = sumMap.get(cellKey) ?? 0;
+      const cnt = cntMap.get(cellKey) ?? 0;
+      matrix[cellKey] = config.measure.kind === "avg" ? (cnt > 0 ? sum / cnt : 0) : sum;
+    }
+  }
+
+  return { rowTuples, colTuples, matrix };
+}
+
+export function pivotCell(result: PivotResult, rowTuple: string[], colTuple: string[]): number {
+  return result.matrix[`${tupleKey(rowTuple)}::${tupleKey(colTuple)}`] ?? 0;
+}
+
+export interface HeaderPlanCell {
+  label: string;
+  span: number;
+}
+
+/**
+ * ネストしたヘッダー（行 or 列）のマージ計画を計算する。
+ * tuples はソート済み前提。各レベルで「先頭からの接頭辞が同じ」連続区間を1セルにまとめる。
+ * 戻り値: plan[level][index] = 描画するセル情報 or null（前のセルの span に含まれ描画しない）
+ */
+export function computeHeaderPlan(tuples: string[][], levels: number): (HeaderPlanCell | null)[][] {
+  const n = tuples.length;
+  const plan: (HeaderPlanCell | null)[][] = Array.from({ length: levels }, () => Array(n).fill(null));
+
+  function prefixEqual(a: string[], b: string[], level: number): boolean {
+    for (let k = 0; k <= level; k++) {
+      if ((a[k] ?? "") !== (b[k] ?? "")) return false;
+    }
+    return true;
+  }
+
+  for (let level = 0; level < levels; level++) {
+    let i = 0;
+    while (i < n) {
+      let j = i + 1;
+      while (j < n && prefixEqual(tuples[i], tuples[j], level)) j++;
+      plan[level][i] = { label: tuples[i][level] ?? "", span: j - i };
+      i = j;
+    }
+  }
+  return plan;
+}
+
+/** 行軸/列軸それぞれのフィールドラベル（コーナー見出し用） */
+export function pivotAxisFieldLabels(
+  axes: AggregationAxis[],
+  fields: AppField[]
+): string[] {
+  return axes.map((axis) => fieldForAxis(fields, axis)?.label ?? "項目");
+}
+
 /** recharts 用のデータ配列に変換 */
 export function resultToChartData(
   result: AggregationResult

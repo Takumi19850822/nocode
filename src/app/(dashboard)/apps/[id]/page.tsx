@@ -16,6 +16,9 @@ import { RecordFormFields } from "@/components/records/RecordFormFields";
 import { RecordDeleteModal } from "@/components/records/RecordDeleteModal";
 import { AggregationView } from "@/components/records/AggregationView";
 import { AppViewRenderer } from "@/components/records/AppViewRenderer";
+import { FilterBar, filterHasConditions } from "@/components/filters/FilterBar";
+import { matchesFilter } from "@/lib/filters/evaluate";
+import { fetchAllRecordValues } from "@/lib/records/fetchAllRecordValues";
 import { getProfileDisplayName } from "@/lib/auth/profileDisplayName";
 import { todayDateString } from "@/lib/utils";
 import type {
@@ -24,10 +27,11 @@ import type {
   AppField,
   AppRecord,
   AppView,
+  FilterConfig,
   SearchFieldConfig,
   DateFieldConfig,
 } from "@/types";
-import { VIEW_TYPE_LABELS } from "@/types";
+import { EMPTY_FILTER, VIEW_TYPE_LABELS } from "@/types";
 import { preserveDashboardScroll } from "@/lib/dom/preserveScroll";
 import { Plus, FileSpreadsheet } from "lucide-react";
 
@@ -45,6 +49,7 @@ export default function AppRuntimePage() {
   const [views, setViews] = useState<AppView[]>([]);
   const [selectedAggId, setSelectedAggId] = useState("");
   const [selectedViewId, setSelectedViewId] = useState("");
+  const [viewFilter, setViewFilter] = useState<FilterConfig>(EMPTY_FILTER);
   const [page, setPage] = useState(1);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
@@ -59,8 +64,6 @@ export default function AppRuntimePage() {
   const PAGE_SIZE = 20;
 
   const selectedView = views.find((v) => v.id === selectedViewId) ?? null;
-  const isTableView =
-    !selectedView || selectedView.config.type === "table";
 
   useEffect(() => {
     loadApp();
@@ -68,40 +71,29 @@ export default function AppRuntimePage() {
   }, [appId]);
 
   useEffect(() => {
-    preserveDashboardScroll(() => setPage(1));
+    preserveDashboardScroll(() => {
+      setPage(1);
+      setViewFilter(selectedView?.config.filter ?? EMPTY_FILTER);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedViewId]);
 
-  // テーブルビュー時のみ、表示ページ分の値を取得
+  // フィルタ適用のため、全レコードの値を一括取得（ビュー共通）
+  const recordIds = records.map((r) => r.id);
   useEffect(() => {
-    if (!isTableView) {
-      setValuesByRecord({});
-      return;
-    }
-    const pageRecordIds = records
-      .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-      .map((r) => r.id);
-    if (pageRecordIds.length === 0) {
+    if (recordIds.length === 0) {
       setValuesByRecord({});
       return;
     }
     let cancelled = false;
-    supabase
-      .from("app_record_values")
-      .select("record_id, field_id, value")
-      .in("record_id", pageRecordIds)
-      .then(({ data }) => {
-        if (cancelled) return;
-        const map: Record<string, Record<string, string>> = {};
-        data?.forEach((v) => {
-          (map[v.record_id] ??= {})[v.field_id] = v.value;
-        });
-        setValuesByRecord(map);
-      });
+    fetchAllRecordValues(supabase, recordIds).then((map) => {
+      if (!cancelled) setValuesByRecord(map);
+    });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [records, page, isTableView, selectedViewId]);
+  }, [recordIds.join(",")]);
 
   async function loadCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -306,9 +298,13 @@ export default function AppRuntimePage() {
     })),
   ];
 
+  const filteredRecords = filterHasConditions(viewFilter)
+    ? records.filter((r) => matchesFilter(viewFilter, fields, valuesByRecord[r.id] ?? {}))
+    : records;
+
   const sectionTitle = selectedView
-    ? `${selectedView.name} (${records.length}件)`
-    : `レコード一覧 (${records.length}件)`;
+    ? `${selectedView.name} (${filteredRecords.length}件${filteredRecords.length !== records.length ? ` / 全${records.length}件` : ""})`
+    : `レコード一覧 (${filteredRecords.length}件${filteredRecords.length !== records.length ? ` / 全${records.length}件` : ""})`;
 
   return (
     <PageFrame>
@@ -418,20 +414,30 @@ export default function AppRuntimePage() {
             ) : undefined
           }
         >
-          <div className="min-h-[320px]">
+          <div className="min-h-[320px] space-y-4">
+            {fields.length > 0 && (
+              <FilterBar
+                fields={fields}
+                value={viewFilter}
+                onChange={(next) => {
+                  setPage(1);
+                  setViewFilter(next);
+                }}
+              />
+            )}
             <AppViewRenderer
-            appId={appId}
-            app={app}
-            fields={fields}
-            records={records}
-            view={selectedView}
-            valuesByRecord={valuesByRecord}
-            page={page}
-            pageSize={PAGE_SIZE}
-            onPageChange={setPage}
-            onDelete={setDeleteRecordId}
-            onRecordUpdated={loadApp}
-          />
+              appId={appId}
+              app={app}
+              fields={fields}
+              records={filteredRecords}
+              view={selectedView}
+              valuesByRecord={valuesByRecord}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+              onDelete={setDeleteRecordId}
+              onRecordUpdated={loadApp}
+            />
           </div>
         </PageSection>
       </PageBody>

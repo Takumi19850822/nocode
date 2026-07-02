@@ -22,6 +22,8 @@ interface AppViewRendererProps {
   onPageChange: (page: number) => void;
   onDelete: (recordId: string) => void;
   onRecordUpdated?: () => void;
+  /** false の場合、カンバンD&D・削除・行リンクを無効化（設定プレビュー用） */
+  interactive?: boolean;
 }
 
 export function AppViewRenderer({
@@ -36,6 +38,7 @@ export function AppViewRenderer({
   onPageChange,
   onDelete,
   onRecordUpdated,
+  interactive = true,
 }: AppViewRendererProps) {
   const config = view?.config ?? defaultTableViewConfig(app.list_field_ids);
 
@@ -58,6 +61,7 @@ export function AppViewRenderer({
         fields={fields}
         records={records}
         onRecordUpdated={onRecordUpdated}
+        interactive={interactive}
       />
     );
   }
@@ -77,6 +81,7 @@ export function AppViewRenderer({
       pageSize={pageSize}
       onPageChange={onPageChange}
       onDelete={onDelete}
+      readOnly={!interactive}
     />
   );
 }

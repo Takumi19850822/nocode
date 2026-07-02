@@ -341,14 +341,12 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
           />
           <p className="text-xs text-gray-500 -mt-2">
             {type === "simple"
-              ? "月別・日別の推移グラフは単純集計＋縦軸に日付フィールドを指定してください。"
+              ? "月別・日別の推移グラフは単純集計＋下の「縦軸（集計キー）」に日付フィールドを指定してください。"
               : "日付×別カテゴリ（例：月×商品）の比較表・グラフ向けです。"}
           </p>
 
           <div className="space-y-3 rounded-lg border border-gray-200 p-3">
-            <p className="text-xs font-medium text-gray-600">
-              {type === "cross" ? "縦軸（集計キー）" : "集計キー"}
-            </p>
+            <p className="text-xs font-medium text-gray-600">縦軸（集計キー）</p>
             <p className="text-xs text-gray-500 -mt-1">
               グラフ表示時：第一キーで色分け（系列）、第二キー以降を横軸（下）に使います。
             </p>

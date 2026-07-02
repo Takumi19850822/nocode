@@ -192,6 +192,42 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   login_user: "ログインユーザ氏名",
 };
 
+// ===== フィルタ =====
+
+/** 数値用演算子 */
+export type NumberFilterOperator = "eq" | "neq" | "lt" | "lte" | "gt" | "gte";
+/** 文字列用演算子 */
+export type TextFilterOperator = "text_eq" | "text_contains" | "text_in";
+/** 日付用演算子 */
+export type DateFilterOperator =
+  | "date_on"
+  | "date_before"
+  | "date_after"
+  | "date_this_month"
+  | "date_last_month"
+  | "date_next_month";
+
+export type FilterOperator = NumberFilterOperator | TextFilterOperator | DateFilterOperator;
+
+export interface FilterCondition {
+  id: string;
+  field_id: string;
+  operator: FilterOperator;
+  /** 単一値（数値・文字列・日付） */
+  value?: string;
+  /** 複数値（選択したものと一致 = text_in） */
+  values?: string[];
+}
+
+export type FilterLogic = "and" | "or";
+
+export interface FilterConfig {
+  logic: FilterLogic;
+  conditions: FilterCondition[];
+}
+
+export const EMPTY_FILTER: FilterConfig = { logic: "and", conditions: [] };
+
 // ===== 集計 / グラフ =====
 
 /** 日付キーの粒度 */
@@ -232,6 +268,8 @@ export interface AggregationConfig {
   measure: AggregationMeasure;
   /** 表示形式 */
   display: AggregationDisplay;
+  /** デフォルトの絞り込み条件（画面上で上書き可能） */
+  filter?: FilterConfig;
 }
 
 export interface AppAggregation {
@@ -254,6 +292,8 @@ export interface TableViewConfig {
   type: "table";
   /** 表示するフィールドID（順番） */
   field_ids: string[];
+  /** デフォルトの絞り込み条件（画面上で上書き可能） */
+  filter?: FilterConfig;
 }
 
 export interface CalendarViewConfig {
@@ -266,6 +306,8 @@ export interface CalendarViewConfig {
   title_field_id?: string;
   /** イベント内に表示する追加フィールド（任意） */
   field_ids?: string[];
+  /** デフォルトの絞り込み条件（画面上で上書き可能） */
+  filter?: FilterConfig;
 }
 
 export interface KanbanViewConfig {
@@ -278,6 +320,8 @@ export interface KanbanViewConfig {
   card_field_ids: string[];
   /** 列の並び順（option value）。未指定時はフィールド定義の順 */
   option_order?: string[];
+  /** デフォルトの絞り込み条件（画面上で上書き可能） */
+  filter?: FilterConfig;
 }
 
 export type ViewConfig = TableViewConfig | CalendarViewConfig | KanbanViewConfig;
