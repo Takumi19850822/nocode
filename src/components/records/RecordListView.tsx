@@ -15,6 +15,8 @@ interface RecordListViewProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onDelete: (recordId: string) => void;
+  /** true の場合、操作列（詳細/削除）を非表示にしプレーン表示のみにする（設定プレビュー用） */
+  readOnly?: boolean;
 }
 
 export function RecordListView({
@@ -26,6 +28,7 @@ export function RecordListView({
   pageSize,
   onPageChange,
   onDelete,
+  readOnly = false,
 }: RecordListViewProps) {
   const pagedRecords = records.slice((page - 1) * pageSize, page * pageSize);
 
@@ -43,7 +46,7 @@ export function RecordListView({
                 <th key={f.id}>{f.label}</th>
               ))}
               <th>作成日</th>
-              <th>操作</th>
+              {!readOnly && <th>操作</th>}
             </tr>
           </thead>
           <tbody>
@@ -55,6 +58,7 @@ export function RecordListView({
                 fields={fields}
                 values={valuesByRecord[record.id] ?? {}}
                 onDelete={() => onDelete(record.id)}
+                readOnly={readOnly}
               />
             ))}
           </tbody>
@@ -76,14 +80,29 @@ function RecordRow({
   fields,
   values,
   onDelete,
+  readOnly,
 }: {
   appId: string;
   record: AppRecord;
   fields: AppField[];
   values: Record<string, string>;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
   const detailHref = `/apps/${appId}/records/${record.id}`;
+
+  if (readOnly) {
+    return (
+      <tr>
+        {fields.map((f) => (
+          <td key={f.id}>{formatFieldDisplayValue(f, values[f.id])}</td>
+        ))}
+        <td className="text-gray-500">
+          {new Date(record.created_at).toLocaleDateString("ja-JP")}
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr>

@@ -1,7 +1,7 @@
 "use client";
 
 import { v4 as uuidv4 } from "uuid";
-import { Plus, Trash2, Filter as FilterIcon, X } from "lucide-react";
+import { Plus, Filter as FilterIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import {

@@ -1,17 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { ChevronDown, ChevronUp, ArrowLeft, Save } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
-import { Badge, Modal } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
+import { FilterBar } from "@/components/filters/FilterBar";
+import { matchesFilter } from "@/lib/filters/evaluate";
+import { AppViewRenderer } from "@/components/records/AppViewRenderer";
 import {
   FIELD_TYPE_LABELS,
   VIEW_TYPE_LABELS,
+  EMPTY_FILTER,
+  type App,
   type AppField,
+  type AppRecord,
   type AppView,
   type CalendarMode,
+  type FilterConfig,
   type KanbanViewConfig,
   type ViewConfig,
   type ViewType,
@@ -20,8 +27,11 @@ import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
 
 interface ViewSettingsProps {
   appId: string;
+  app: App;
   fields: AppField[];
   listFieldIds: string[];
+  previewRecords: AppRecord[];
+  previewValues: Record<string, Record<string, string>>;
 }
 
 function FieldPicker({
@@ -115,12 +125,20 @@ function FieldPicker({
   );
 }
 
-export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps) {
+export function ViewSettings({
+  appId,
+  app,
+  fields,
+  listFieldIds,
+  previewRecords,
+  previewValues,
+}: ViewSettingsProps) {
   const [views, setViews] = useState<AppView[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [name, setName] = useState("");
   const [viewType, setViewType] = useState<ViewType>("table");
@@ -133,6 +151,7 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
   const [kanbanTitleFieldId, setKanbanTitleFieldId] = useState("");
   const [kanbanCardFieldIds, setKanbanCardFieldIds] = useState<string[]>([]);
   const [kanbanOptionOrder, setKanbanOptionOrder] = useState<string[]>([]);
+  const [defaultFilter, setDefaultFilter] = useState<FilterConfig>(EMPTY_FILTER);
 
   const supabase = createClient();
 
@@ -172,6 +191,7 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
     setKanbanTitleFieldId(fields[0]?.id ?? "");
     setKanbanCardFieldIds([]);
     setKanbanOptionOrder([]);
+    setDefaultFilter(EMPTY_FILTER);
     setError("");
   }
 
@@ -199,17 +219,20 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
       setKanbanCardFieldIds(c.card_field_ids);
       setKanbanOptionOrder(c.option_order ?? []);
     }
+    setDefaultFilter(c.filter ?? EMPTY_FILTER);
     setError("");
     setOpen(true);
   }
 
-  function buildConfig(): ViewConfig | null {
+  function buildConfig(showError: boolean): ViewConfig | null {
+    const filterPart = defaultFilter.conditions.length > 0 ? { filter: defaultFilter } : {};
+
     if (viewType === "table") {
-      return { type: "table", field_ids: tableFieldIds };
+      return { type: "table", field_ids: tableFieldIds, ...filterPart };
     }
     if (viewType === "calendar") {
       if (!dateFieldId) {
-        setError("日付フィールドを選択してください");
+        if (showError) setError("日付フィールドを選択してください");
         return null;
       }
       return {
@@ -218,14 +241,15 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
         default_mode: calendarMode,
         ...(calendarTitleFieldId ? { title_field_id: calendarTitleFieldId } : {}),
         ...(calendarExtraFieldIds.length > 0 ? { field_ids: calendarExtraFieldIds } : {}),
+        ...filterPart,
       };
     }
     if (!statusFieldId) {
-      setError("ステータス（プルダウン）フィールドを選択してください");
+      if (showError) setError("ステータス（プルダウン）フィールドを選択してください");
       return null;
     }
     if (!kanbanTitleFieldId) {
-      setError("カードのラベルフィールドを選択してください");
+      if (showError) setError("カードのラベルフィールドを選択してください");
       return null;
     }
     const config: KanbanViewConfig = {
@@ -233,6 +257,7 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
       status_field_id: statusFieldId,
       title_field_id: kanbanTitleFieldId,
       card_field_ids: kanbanCardFieldIds,
+      ...filterPart,
     };
     if (kanbanOptionOrder.length > 0) {
       config.option_order = kanbanOptionOrder;
@@ -240,14 +265,52 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
     return config;
   }
 
+  const previewConfig = useMemo(
+    () => buildConfig(false),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      viewType,
+      tableFieldIds,
+      dateFieldId,
+      calendarMode,
+      calendarTitleFieldId,
+      calendarExtraFieldIds,
+      statusFieldId,
+      kanbanTitleFieldId,
+      kanbanCardFieldIds,
+      kanbanOptionOrder,
+      defaultFilter,
+    ]
+  );
+
+  const previewView: AppView | null = useMemo(() => {
+    if (!previewConfig) return null;
+    return {
+      id: editingId ?? "preview",
+      app_id: appId,
+      name: name.trim() || "プレビュー",
+      config: previewConfig,
+      sort_order: 0,
+      created_at: "",
+      updated_at: "",
+    };
+  }, [previewConfig, editingId, appId, name]);
+
+  const previewFilteredRecords = useMemo(() => {
+    if (defaultFilter.conditions.length === 0) return previewRecords;
+    return previewRecords.filter((r) => matchesFilter(defaultFilter, fields, previewValues[r.id] ?? {}));
+  }, [previewRecords, defaultFilter, fields, previewValues]);
+
   async function handleSave() {
     setError("");
     if (!name.trim()) {
       setError("ビュー名を入力してください");
       return;
     }
-    const config = buildConfig();
+    const config = buildConfig(true);
     if (!config) return;
+
+    setSaving(true);
 
     if (editingId) {
       const { error: e } = await supabase
@@ -256,6 +319,7 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
         .eq("id", editingId);
       if (e) {
         setError(`保存に失敗しました: ${e.message}`);
+        setSaving(false);
         return;
       }
     } else {
@@ -270,9 +334,11 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
           ? "（012_app_views.sql のマイグレーション未実行の可能性があります）"
           : "";
         setError(`保存に失敗しました: ${e.message}${hint}`);
+        setSaving(false);
         return;
       }
     }
+    setSaving(false);
     setOpen(false);
     load();
   }
@@ -303,6 +369,206 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
     selectedStatusField?.options.map((o) => o.value) ?? [];
   const displayKanbanOrder =
     kanbanOptionOrder.length > 0 ? kanbanOptionOrder : kanbanColumns;
+
+  if (open) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            ビュー一覧に戻る
+          </button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="w-4 h-4 mr-1" />
+              {saving ? "保存中..." : "保存"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+            <Input
+              label="名前"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例: 月間スケジュール"
+              required
+            />
+
+            <Select
+              label="ビュータイプ"
+              value={viewType}
+              onChange={(e) => setViewType(e.target.value as ViewType)}
+              options={[
+                { label: "一覧（表）", value: "table" },
+                { label: "カレンダー", value: "calendar" },
+                { label: "カンバン", value: "kanban" },
+              ]}
+            />
+
+            {viewType === "table" && (
+              <FieldPicker
+                fields={fields}
+                selectedIds={tableFieldIds}
+                onChange={setTableFieldIds}
+                label="表示するフィールド（順番）"
+              />
+            )}
+
+            {viewType === "calendar" && (
+              <>
+                <Select
+                  label="日付フィールド"
+                  value={dateFieldId}
+                  onChange={(e) => setDateFieldId(e.target.value)}
+                  options={[
+                    { label: "選択してください", value: "" },
+                    ...dateFieldOptions,
+                  ]}
+                />
+                <Select
+                  label="初期表示"
+                  value={calendarMode}
+                  onChange={(e) => setCalendarMode(e.target.value as CalendarMode)}
+                  options={[
+                    { label: "日", value: "day" },
+                    { label: "週", value: "week" },
+                    { label: "月", value: "month" },
+                  ]}
+                />
+                <Select
+                  label="イベントのタイトル（任意）"
+                  value={calendarTitleFieldId}
+                  onChange={(e) => setCalendarTitleFieldId(e.target.value)}
+                  options={[{ label: "なし", value: "" }, ...fieldOptions]}
+                />
+                <FieldPicker
+                  fields={fields}
+                  selectedIds={calendarExtraFieldIds}
+                  onChange={setCalendarExtraFieldIds}
+                  label="イベント内に表示するフィールド（任意）"
+                />
+              </>
+            )}
+
+            {viewType === "kanban" && (
+              <>
+                <Select
+                  label="ステータス（列）フィールド"
+                  value={statusFieldId}
+                  onChange={(e) => {
+                    setStatusFieldId(e.target.value);
+                    setKanbanOptionOrder([]);
+                  }}
+                  options={[
+                    { label: "選択してください", value: "" },
+                    ...statusFieldOptions,
+                  ]}
+                />
+                <p className="text-xs text-gray-500 -mt-2">
+                  プルダウンまたはラジオボタンを指定。左から選択肢の順に列が並びます。
+                </p>
+                <Select
+                  label="カードのラベル"
+                  value={kanbanTitleFieldId}
+                  onChange={(e) => setKanbanTitleFieldId(e.target.value)}
+                  options={[
+                    { label: "選択してください", value: "" },
+                    ...fieldOptions,
+                  ]}
+                />
+                <FieldPicker
+                  fields={fields}
+                  selectedIds={kanbanCardFieldIds}
+                  onChange={setKanbanCardFieldIds}
+                  label="カードに表示する値"
+                />
+                {selectedStatusField && displayKanbanOrder.length > 0 && (
+                  <div className="space-y-1 rounded-lg border border-gray-200 p-3">
+                    <p className="text-xs font-medium text-gray-600">列の並び順</p>
+                    {displayKanbanOrder.map((val, i) => {
+                      const opt = selectedStatusField.options.find((o) => o.value === val);
+                      return (
+                        <div
+                          key={val}
+                          className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded text-sm"
+                        >
+                          <span className="flex-1 truncate">{opt?.label ?? val}</span>
+                          <button
+                            type="button"
+                            disabled={i === 0}
+                            onClick={() => moveKanbanOption(val, -1)}
+                            className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                          >
+                            <ChevronUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={i === displayKanbanOrder.length - 1}
+                            onClick={() => moveKanbanOption(val, 1)}
+                            className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-700">デフォルトの絞り込み条件</p>
+              <p className="text-xs text-gray-500">
+                実行画面を開いたときの初期状態です。実行画面でも変更できます。
+              </p>
+              <FilterBar fields={fields} value={defaultFilter} onChange={setDefaultFilter} compact />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </div>
+
+          <div className="lg:sticky lg:top-4 lg:self-start">
+            <p className="text-xs font-medium text-gray-500 mb-2">プレビュー</p>
+            <div className="rounded-lg border border-gray-200 bg-white p-4 max-h-[75vh] overflow-y-auto">
+              {previewRecords.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">
+                  プレビュー用のレコードがありません
+                </p>
+              ) : previewView ? (
+                <AppViewRenderer
+                  appId={appId}
+                  app={app}
+                  fields={fields}
+                  records={previewFilteredRecords}
+                  view={previewView}
+                  valuesByRecord={previewValues}
+                  page={1}
+                  pageSize={10}
+                  onPageChange={() => {}}
+                  onDelete={() => {}}
+                  interactive={false}
+                />
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-8">
+                  必要な項目を入力するとプレビューが表示されます
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -352,155 +618,6 @@ export function ViewSettings({ appId, fields, listFieldIds }: ViewSettingsProps)
           ))}
         </ul>
       )}
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={editingId ? "ビューを編集" : "ビューを追加"}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setOpen(false)}>
-              キャンセル
-            </Button>
-            <Button onClick={handleSave}>保存</Button>
-          </>
-        }
-      >
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-          <Input
-            label="名前"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="例: 月間スケジュール"
-            required
-          />
-
-          <Select
-            label="ビュータイプ"
-            value={viewType}
-            onChange={(e) => setViewType(e.target.value as ViewType)}
-            options={[
-              { label: "一覧（表）", value: "table" },
-              { label: "カレンダー", value: "calendar" },
-              { label: "カンバン", value: "kanban" },
-            ]}
-          />
-
-          {viewType === "table" && (
-            <FieldPicker
-              fields={fields}
-              selectedIds={tableFieldIds}
-              onChange={setTableFieldIds}
-              label="表示するフィールド（順番）"
-            />
-          )}
-
-          {viewType === "calendar" && (
-            <>
-              <Select
-                label="日付フィールド"
-                value={dateFieldId}
-                onChange={(e) => setDateFieldId(e.target.value)}
-                options={[
-                  { label: "選択してください", value: "" },
-                  ...dateFieldOptions,
-                ]}
-              />
-              <Select
-                label="初期表示"
-                value={calendarMode}
-                onChange={(e) => setCalendarMode(e.target.value as CalendarMode)}
-                options={[
-                  { label: "日", value: "day" },
-                  { label: "週", value: "week" },
-                  { label: "月", value: "month" },
-                ]}
-              />
-              <Select
-                label="イベントのタイトル（任意）"
-                value={calendarTitleFieldId}
-                onChange={(e) => setCalendarTitleFieldId(e.target.value)}
-                options={[{ label: "なし", value: "" }, ...fieldOptions]}
-              />
-              <FieldPicker
-                fields={fields}
-                selectedIds={calendarExtraFieldIds}
-                onChange={setCalendarExtraFieldIds}
-                label="イベント内に表示するフィールド（任意）"
-              />
-            </>
-          )}
-
-          {viewType === "kanban" && (
-            <>
-              <Select
-                label="ステータス（列）フィールド"
-                value={statusFieldId}
-                onChange={(e) => {
-                  setStatusFieldId(e.target.value);
-                  setKanbanOptionOrder([]);
-                }}
-                options={[
-                  { label: "選択してください", value: "" },
-                  ...statusFieldOptions,
-                ]}
-              />
-              <p className="text-xs text-gray-500 -mt-2">
-                プルダウンまたはラジオボタンを指定。左から選択肢の順に列が並びます。
-              </p>
-              <Select
-                label="カードのラベル"
-                value={kanbanTitleFieldId}
-                onChange={(e) => setKanbanTitleFieldId(e.target.value)}
-                options={[
-                  { label: "選択してください", value: "" },
-                  ...fieldOptions,
-                ]}
-              />
-              <FieldPicker
-                fields={fields}
-                selectedIds={kanbanCardFieldIds}
-                onChange={setKanbanCardFieldIds}
-                label="カードに表示する値"
-              />
-              {selectedStatusField && displayKanbanOrder.length > 0 && (
-                <div className="space-y-1 rounded-lg border border-gray-200 p-3">
-                  <p className="text-xs font-medium text-gray-600">列の並び順</p>
-                  {displayKanbanOrder.map((val, i) => {
-                    const opt = selectedStatusField.options.find((o) => o.value === val);
-                    return (
-                      <div
-                        key={val}
-                        className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded text-sm"
-                      >
-                        <span className="flex-1 truncate">{opt?.label ?? val}</span>
-                        <button
-                          type="button"
-                          disabled={i === 0}
-                          onClick={() => moveKanbanOption(val, -1)}
-                          className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                        >
-                          <ChevronUp className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={i === displayKanbanOrder.length - 1}
-                          onClick={() => moveKanbanOption(val, 1)}
-                          className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                        >
-                          <ChevronDown className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
-      </Modal>
     </div>
   );
 }

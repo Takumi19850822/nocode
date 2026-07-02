@@ -366,7 +366,7 @@ function PivotTable({
   fields: AppField[];
   measure: string;
 }) {
-  const { rowTuples, colTuples, matrix } = pivot;
+  const { rowTuples, colTuples } = pivot;
   if (rowTuples.length === 0) return null;
 
   const rowAxes = getRowAxes(config);

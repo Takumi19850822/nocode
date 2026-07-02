@@ -22,9 +22,13 @@ import {
 } from "@/components/builder/FieldSettingsPanel";
 import { generateFieldName } from "@/lib/utils";
 import { sanitizeListFieldIds } from "@/lib/records/getListDisplayFields";
+import { fetchAllRecordValues } from "@/lib/records/fetchAllRecordValues";
 import { snapFieldWidth } from "@/types";
-import type { App, AppField, FieldType } from "@/types";
+import type { App, AppField, AppRecord, FieldType } from "@/types";
 import { Save, Plus } from "lucide-react";
+
+/** 設定画面のプレビューに使う最大レコード数（負荷抑制のため） */
+const PREVIEW_RECORD_LIMIT = 200;
 
 type PanelMode = "idle" | "add" | "edit";
 
@@ -43,6 +47,8 @@ export default function AppBuilderPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [listFieldIds, setListFieldIds] = useState<string[]>([]);
+  const [previewRecords, setPreviewRecords] = useState<AppRecord[]>([]);
+  const [previewValues, setPreviewValues] = useState<Record<string, Record<string, string>>>({});
 
   const supabase = createClient();
   const selectedField = fields.find((f) => f.id === selectedId) ?? null;
@@ -64,9 +70,15 @@ export default function AppBuilderPage() {
     setTenantId(appData.tenant_id);
     setListFieldIds(appData.list_field_ids ?? []);
 
-    const [fieldsRes, appsRes] = await Promise.all([
+    const [fieldsRes, appsRes, recordsRes] = await Promise.all([
       supabase.from("app_fields").select("*").eq("app_id", appId).order("sort_order"),
       supabase.from("apps").select("id, name").eq("tenant_id", appData.tenant_id),
+      supabase
+        .from("app_records")
+        .select("*")
+        .eq("app_id", appId)
+        .order("created_at", { ascending: false })
+        .limit(PREVIEW_RECORD_LIMIT),
     ]);
 
     setFields(
@@ -77,6 +89,10 @@ export default function AppBuilderPage() {
       })) ?? []
     );
     setAllApps(appsRes.data ?? []);
+
+    const records = recordsRes.data ?? [];
+    setPreviewRecords(records);
+    setPreviewValues(await fetchAllRecordValues(supabase, records.map((r) => r.id)));
   }
 
   function startAddField() {
@@ -307,16 +323,27 @@ export default function AppBuilderPage() {
                 onChange={setListFieldIds}
               />
             </PageSection>
-
-            <PageSection title="ビュー（一覧 / カレンダー / カンバン）" bordered>
-              <ViewSettings appId={appId} fields={fields} listFieldIds={listFieldIds} />
-            </PageSection>
-
-            <PageSection title="集計 / グラフ" bordered>
-              <AggregationSettings appId={appId} fields={fields} />
-            </PageSection>
           </div>
         </div>
+
+        <PageSection title="ビュー（一覧 / カレンダー / カンバン）" bordered>
+          <ViewSettings
+            appId={appId}
+            app={app}
+            fields={fields}
+            listFieldIds={listFieldIds}
+            previewRecords={previewRecords}
+            previewValues={previewValues}
+          />
+        </PageSection>
+
+        <PageSection title="集計 / グラフ" bordered>
+          <AggregationSettings
+            appId={appId}
+            fields={fields}
+            previewRecords={previewRecords}
+          />
+        </PageSection>
       </PageBody>
     </PageFrame>
   );

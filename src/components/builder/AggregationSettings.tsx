@@ -1,23 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
-import { Badge, Modal } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
+import { FilterBar } from "@/components/filters/FilterBar";
+import { AggregationView } from "@/components/records/AggregationView";
 import type {
   AppAggregation,
   AppField,
+  AppRecord,
   AggregationAxis,
   AggregationConfig,
   AggregationDisplay,
   DateUnit,
+  FilterConfig,
 } from "@/types";
-import { Plus, Pencil, Trash2, BarChart3 } from "lucide-react";
+import { EMPTY_FILTER } from "@/types";
+import { ArrowLeft, Plus, Pencil, Trash2, BarChart3, Save } from "lucide-react";
 
 interface AggregationSettingsProps {
   appId: string;
   fields: AppField[];
+  previewRecords: AppRecord[];
 }
 
 const DISPLAY_LABELS: Record<AggregationDisplay, string> = {
@@ -97,12 +103,13 @@ function AxisKeyFields({
   );
 }
 
-export function AggregationSettings({ appId, fields }: AggregationSettingsProps) {
+export function AggregationSettings({ appId, fields, previewRecords }: AggregationSettingsProps) {
   const [aggregations, setAggregations] = useState<AppAggregation[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<"simple" | "cross">("simple");
@@ -115,6 +122,7 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
   const [measureKind, setMeasureKind] = useState<"count" | "sum" | "avg">("count");
   const [measureFieldId, setMeasureFieldId] = useState("");
   const [display, setDisplay] = useState<AggregationDisplay>("table");
+  const [defaultFilter, setDefaultFilter] = useState<FilterConfig>(EMPTY_FILTER);
 
   const supabase = createClient();
 
@@ -149,6 +157,7 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
     setMeasureKind("count");
     setMeasureFieldId(measureFieldOptions[0]?.value ?? "");
     setDisplay("table");
+    setDefaultFilter(EMPTY_FILTER);
     setError("");
   }
 
@@ -172,22 +181,23 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
     setMeasureKind(c.measure.kind);
     setMeasureFieldId(c.measure.kind === "count" ? "" : c.measure.field_id);
     setDisplay(c.display);
+    setDefaultFilter(c.filter ?? EMPTY_FILTER);
     setError("");
     setOpen(true);
   }
 
-  function buildConfig(): AggregationConfig | null {
+  function buildConfig(showError: boolean): AggregationConfig | null {
     const rowAxis = buildAxis(row1, fields);
     if (!rowAxis) {
-      setError("集計キー（縦軸 第一キー）を選択してください");
+      if (showError) setError("集計キー（縦軸 第一キー）を選択してください");
       return null;
     }
     if (measureKind !== "count" && !measureFieldId) {
-      setError("合計/平均の対象となる数値フィールドを選択してください");
+      if (showError) setError("合計/平均の対象となる数値フィールドを選択してください");
       return null;
     }
     if (type === "cross" && !col1.fieldId) {
-      setError("クロス集計では横軸（第一キー）を選択してください");
+      if (showError) setError("クロス集計では横軸（第一キー）を選択してください");
       return null;
     }
 
@@ -199,6 +209,7 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
           ? { kind: "count" }
           : { kind: measureKind, field_id: measureFieldId },
       display,
+      ...(defaultFilter.conditions.length > 0 ? { filter: defaultFilter } : {}),
     };
 
     const row2Axis = buildAxis(row2, fields);
@@ -217,14 +228,36 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
     return config;
   }
 
+  // プレビュー用（エラー表示なし・常時再計算）
+  const previewConfig = useMemo(
+    () => buildConfig(false),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [row1, row2, row3, col1, col2, col3, type, measureKind, measureFieldId, display, defaultFilter, fields]
+  );
+
+  const previewAggregation: AppAggregation | null = useMemo(() => {
+    if (!previewConfig) return null;
+    return {
+      id: editingId ?? "preview",
+      app_id: appId,
+      name: name.trim() || "プレビュー",
+      config: previewConfig,
+      sort_order: 0,
+      created_at: "",
+      updated_at: "",
+    };
+  }, [previewConfig, editingId, appId, name]);
+
   async function handleSave() {
     setError("");
     if (!name.trim()) {
       setError("集計の名前を入力してください");
       return;
     }
-    const config = buildConfig();
+    const config = buildConfig(true);
     if (!config) return;
+
+    setSaving(true);
 
     if (editingId) {
       const { error: e } = await supabase
@@ -233,6 +266,7 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
         .eq("id", editingId);
       if (e) {
         setError(`保存に失敗しました: ${e.message}`);
+        setSaving(false);
         return;
       }
     } else {
@@ -247,9 +281,11 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
           ? "（010_field_layout_and_aggregations.sql のマイグレーション未実行の可能性があります）"
           : "";
         setError(`保存に失敗しました: ${e.message}${hint}`);
+        setSaving(false);
         return;
       }
     }
+    setSaving(false);
     setOpen(false);
     load();
   }
@@ -258,6 +294,186 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
     if (!confirm("この集計を削除しますか？")) return;
     await supabase.from("app_aggregations").delete().eq("id", id);
     load();
+  }
+
+  if (open) {
+    const previewRecordIds = previewRecords.map((r) => r.id);
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            集計一覧に戻る
+          </button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="w-4 h-4 mr-1" />
+              {saving ? "保存中..." : "保存"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <Input
+              label="名前"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例: 月別売上"
+              required
+            />
+
+            <Select
+              label="集計タイプ"
+              value={type}
+              onChange={(e) => setType(e.target.value as "simple" | "cross")}
+              options={[
+                { label: "単純集計", value: "simple" },
+                { label: "クロス集計", value: "cross" },
+              ]}
+            />
+            <p className="text-xs text-gray-500 -mt-2">
+              {type === "simple"
+                ? "月別・日別の推移グラフは単純集計＋下の「縦軸（集計キー）」に日付フィールドを指定してください。"
+                : "日付×別カテゴリ（例：月×商品）の比較表・グラフ向けです。"}
+            </p>
+
+            <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+              <p className="text-xs font-medium text-gray-600">縦軸（集計キー）</p>
+              <p className="text-xs text-gray-500 -mt-1">
+                表示時は最大3キーまでネストして集計します（クロス集計時は行方向）。
+              </p>
+              <AxisKeyFields
+                label="第一キー"
+                slot={row1}
+                onChange={setRow1}
+                fieldOptions={fieldOptions}
+                fields={fields}
+              />
+              <AxisKeyFields
+                label="第二キー（任意）"
+                optional
+                slot={row2}
+                onChange={setRow2}
+                fieldOptions={fieldOptions}
+                fields={fields}
+              />
+              <AxisKeyFields
+                label="第三キー（任意）"
+                optional
+                slot={row3}
+                onChange={setRow3}
+                fieldOptions={fieldOptions}
+                fields={fields}
+              />
+            </div>
+
+            {type === "cross" && (
+              <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+                <p className="text-xs font-medium text-gray-600">横軸（集計キー）</p>
+                <AxisKeyFields
+                  label="第一キー"
+                  slot={col1}
+                  onChange={setCol1}
+                  fieldOptions={fieldOptions}
+                  fields={fields}
+                />
+                <AxisKeyFields
+                  label="第二キー（任意）"
+                  optional
+                  slot={col2}
+                  onChange={setCol2}
+                  fieldOptions={fieldOptions}
+                  fields={fields}
+                />
+                <AxisKeyFields
+                  label="第三キー（任意）"
+                  optional
+                  slot={col3}
+                  onChange={setCol3}
+                  fieldOptions={fieldOptions}
+                  fields={fields}
+                />
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Select
+                label="集計値"
+                value={measureKind}
+                onChange={(e) => setMeasureKind(e.target.value as "count" | "sum" | "avg")}
+                options={[
+                  { label: "件数", value: "count" },
+                  { label: "合計", value: "sum" },
+                  { label: "平均", value: "avg" },
+                ]}
+              />
+              {measureKind !== "count" && (
+                <Select
+                  label="対象の数値フィールド"
+                  value={measureFieldId}
+                  onChange={(e) => setMeasureFieldId(e.target.value)}
+                  options={[
+                    { label: "選択してください", value: "" },
+                    ...measureFieldOptions,
+                  ]}
+                />
+              )}
+            </div>
+
+            <Select
+              label="表示形式"
+              value={display}
+              onChange={(e) => setDisplay(e.target.value as AggregationDisplay)}
+              options={[
+                { label: "表", value: "table" },
+                { label: "棒グラフ", value: "bar" },
+                { label: "折れ線グラフ", value: "line" },
+              ]}
+            />
+
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-700">デフォルトの絞り込み条件</p>
+              <p className="text-xs text-gray-500">
+                実行画面を開いたときの初期状態です。実行画面でも変更できます。
+              </p>
+              <FilterBar fields={fields} value={defaultFilter} onChange={setDefaultFilter} compact />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </div>
+
+          <div className="lg:sticky lg:top-4 lg:self-start">
+            <p className="text-xs font-medium text-gray-500 mb-2">プレビュー</p>
+            <div className="rounded-lg border border-gray-200 bg-white p-4">
+              {previewRecordIds.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">
+                  プレビュー用のレコードがありません
+                </p>
+              ) : previewAggregation ? (
+                <AggregationView
+                  aggregation={previewAggregation}
+                  fields={fields}
+                  recordIds={previewRecordIds}
+                />
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-8">
+                  縦軸キーなどを入力するとプレビューが表示されます
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -307,141 +523,6 @@ export function AggregationSettings({ appId, fields }: AggregationSettingsProps)
           ))}
         </ul>
       )}
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={editingId ? "集計を編集" : "集計を追加"}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setOpen(false)}>
-              キャンセル
-            </Button>
-            <Button onClick={handleSave}>保存</Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Input
-            label="名前"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="例: 月別売上"
-            required
-          />
-
-          <Select
-            label="集計タイプ"
-            value={type}
-            onChange={(e) => setType(e.target.value as "simple" | "cross")}
-            options={[
-              { label: "単純集計", value: "simple" },
-              { label: "クロス集計", value: "cross" },
-            ]}
-          />
-          <p className="text-xs text-gray-500 -mt-2">
-            {type === "simple"
-              ? "月別・日別の推移グラフは単純集計＋下の「縦軸（集計キー）」に日付フィールドを指定してください。"
-              : "日付×別カテゴリ（例：月×商品）の比較表・グラフ向けです。"}
-          </p>
-
-          <div className="space-y-3 rounded-lg border border-gray-200 p-3">
-            <p className="text-xs font-medium text-gray-600">縦軸（集計キー）</p>
-            <p className="text-xs text-gray-500 -mt-1">
-              グラフ表示時：第一キーで色分け（系列）、第二キー以降を横軸（下）に使います。
-            </p>
-            <AxisKeyFields
-              label="第一キー"
-              slot={row1}
-              onChange={setRow1}
-              fieldOptions={fieldOptions}
-              fields={fields}
-            />
-            <AxisKeyFields
-              label="第二キー（任意）"
-              optional
-              slot={row2}
-              onChange={setRow2}
-              fieldOptions={fieldOptions}
-              fields={fields}
-            />
-            <AxisKeyFields
-              label="第三キー（任意）"
-              optional
-              slot={row3}
-              onChange={setRow3}
-              fieldOptions={fieldOptions}
-              fields={fields}
-            />
-          </div>
-
-          {type === "cross" && (
-            <div className="space-y-3 rounded-lg border border-gray-200 p-3">
-              <p className="text-xs font-medium text-gray-600">横軸（集計キー）</p>
-              <AxisKeyFields
-                label="第一キー"
-                slot={col1}
-                onChange={setCol1}
-                fieldOptions={fieldOptions}
-                fields={fields}
-              />
-              <AxisKeyFields
-                label="第二キー（任意）"
-                optional
-                slot={col2}
-                onChange={setCol2}
-                fieldOptions={fieldOptions}
-                fields={fields}
-              />
-              <AxisKeyFields
-                label="第三キー（任意）"
-                optional
-                slot={col3}
-                onChange={setCol3}
-                fieldOptions={fieldOptions}
-                fields={fields}
-              />
-            </div>
-          )}
-
-          <div className="space-y-1">
-            <Select
-              label="集計値"
-              value={measureKind}
-              onChange={(e) => setMeasureKind(e.target.value as "count" | "sum" | "avg")}
-              options={[
-                { label: "件数", value: "count" },
-                { label: "合計", value: "sum" },
-                { label: "平均", value: "avg" },
-              ]}
-            />
-            {measureKind !== "count" && (
-              <Select
-                label="対象の数値フィールド"
-                value={measureFieldId}
-                onChange={(e) => setMeasureFieldId(e.target.value)}
-                options={[
-                  { label: "選択してください", value: "" },
-                  ...measureFieldOptions,
-                ]}
-              />
-            )}
-          </div>
-
-          <Select
-            label="表示形式"
-            value={display}
-            onChange={(e) => setDisplay(e.target.value as AggregationDisplay)}
-            options={[
-              { label: "表", value: "table" },
-              { label: "棒グラフ", value: "bar" },
-              { label: "折れ線グラフ", value: "line" },
-            ]}
-          />
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
-      </Modal>
     </div>
   );
 }
